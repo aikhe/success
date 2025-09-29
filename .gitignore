@@ -1,2 +1,7 @@
-build/
+.vscode
 .cache/
+
+# builds
+build/
+*.exe
+*.o
