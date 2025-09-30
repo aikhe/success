@@ -5,3 +5,5 @@
 build/
 *.exe
 *.o
+
+env.json

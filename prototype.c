@@ -1,3 +1,4 @@
+#include <cjson/cJSON.h>
 #include <curl/curl.h>
 #include <memoryapi.h>
 #include <stdbool.h>
@@ -9,6 +10,24 @@ typedef struct Memory {
   char *response;
   size_t size;
 } Memory;
+
+char *read_file(const char *filename) {
+  FILE *fptr = fopen(filename, "rb");
+  if (!fptr)
+    return NULL;
+
+  fseek(fptr, 0, SEEK_END);  // move position indicator to end
+  long length = ftell(fptr); // get length
+  rewind(fptr);              // move position indicator to end
+
+  char *data = malloc(length + 1); // add 1 for null terminator
+  fread(data, 1, length, fptr);    // this is where data finally gets read
+  data[length] =
+      '\0'; // add null terminator (crucial for printf & other string functions)
+  fclose(fptr);
+
+  return data;
+}
 
 static size_t write_callback(char *ptr, size_t size, size_t nmemb,
                              void *userdata) {
@@ -25,7 +44,7 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
   mem->response = temp;
   memcpy(&(mem->response[mem->size]), ptr, totalBytes);
   mem->size += totalBytes;
-  mem->response[mem->size] = 0;
+  mem->response[mem->size] = '\0';
 
   printf("total chunk totalBytes: %zu\n", totalBytes);
   printf("%d:\t", lineNum);
@@ -51,6 +70,12 @@ int main(void) {
   }
 
   printf("[INFO] Success succeeded!\n\n");
+
+  char *json_data = read_file("env.json");
+  cJSON *root = cJSON_Parse(json_data);
+
+  cJSON *name = cJSON_GetObjectItemCaseSensitive(root, "name");
+  printf("Name: %s\n", name->valuestring);
 
   CURL *curl;
   CURLcode res;
@@ -79,7 +104,10 @@ int main(void) {
     }
 
     curl_easy_cleanup(curl);
+  } else {
+    fprintf(stderr, "Curl initialization failed.\n");
   }
 
+  free(mem.response);
   return EXIT_SUCCESS;
 }
