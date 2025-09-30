@@ -1,7 +1,5 @@
-RM = powershell -Command "Remove-Item -Force -ErrorAction SilentlyContinue"
-
 all:
-	gcc -Wall -g prototype.c -I"./include" -L"./lib" -lcurl -o prototype
+	gcc -Wall -g -D__USE_MINGW_ANSI_STDIO=1 prototype.c -I"./include" -L"./lib" -lcurl -o prototype
 
 run: all
 	.\prototype
