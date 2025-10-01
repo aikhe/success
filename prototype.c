@@ -143,6 +143,18 @@ int main(void) {
 
     res = curl_easy_perform(curl);
 
+    cJSON *mem_res = cJSON_Parse(mem.response);
+    cJSON *candidates = cJSON_GetObjectItemCaseSensitive(mem_res, "candidates");
+    cJSON *first_candidate = cJSON_GetArrayItem(candidates, 0);
+    cJSON *content =
+        cJSON_GetObjectItemCaseSensitive(first_candidate, "content");
+    cJSON *parts = cJSON_GetObjectItemCaseSensitive(content, "parts");
+    cJSON *first_part = cJSON_GetArrayItem(parts, 0);
+    cJSON *text = cJSON_GetObjectItemCaseSensitive(first_part, "text");
+
+    printf("\nGemini response text: %s\n", text->valuestring);
+    cJSON_Delete(mem_res);
+
     if (res != CURLE_OK) {
       fprintf(stderr, "curl_easy_perform() failed. %s\n",
               curl_easy_strerror(res));
@@ -157,9 +169,9 @@ int main(void) {
     fprintf(stderr, "Curl initialization failed.\n");
   }
 
+  free(env_json);
   cJSON_Delete(env);
   free(gemini_header_json);
-  free(env_json);
   free(mem.response);
   curl_global_cleanup();
 
