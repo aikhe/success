@@ -4,6 +4,7 @@
 #include <stddef.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #define QUOTE(...) #__VA_ARGS__ // pre-processor to turn content into string
 
@@ -159,8 +160,8 @@ int main(void) {
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&mem);
 
-    // curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L); // removes SSL
     // verification
+    // curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L); // removes SSL
     curl_easy_setopt(curl, CURLOPT_CAINFO,
                      "cacert-2025-09-09.pem"); // set cacert for ssl
 
@@ -186,6 +187,8 @@ int main(void) {
       // printf("\nFrom mem->response:\n%s\n", mem.response);
     }
 
+    free(req_body_json_str);
+    cJSON_Delete(req_body_json);
     curl_slist_free_all(list);
     curl_easy_cleanup(curl);
   } else {
