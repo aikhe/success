@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-#define QUOTE(...) #__VA_ARGS__
+#define QUOTE(...) #__VA_ARGS__ // pre-processor to turn content into string
 
 typedef struct Memory {
   char *response;
@@ -124,16 +124,9 @@ int main(void) {
     list = curl_slist_append(list, auth_header);
     list = curl_slist_append(list, content_type);
 
-    /* Optional: reduce internal buffering to get data to you faster */
-    curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 10240L); /* 10KB buffer */
-
-    /* Useful timeouts to avoid hanging indefinitely */
-    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L); /* connection timeout */
-    /* Do NOT set an overall CURLOPT_TIMEOUT if you expect the stream to be open
-       for long. If you want an overall limit, set CURLOPT_TIMEOUT to a large
-       value. */
-
-    /* TCP_NODELAY can reduce latency for small data */
+    // reduce latency
+    curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 5000L);
+    curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
     curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1L);
 
     // curl_easy_setopt(curl, CURLOPT_URL, "https://jacobsorber.com");
@@ -154,6 +147,7 @@ int main(void) {
       fprintf(stderr, "curl_easy_perform() failed. %s\n",
               curl_easy_strerror(res));
     } else {
+      printf("\nmem->response address: %p\n", &mem);
       printf("\nFrom mem->response:\n%s\n", mem.response);
     }
 
