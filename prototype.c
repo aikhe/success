@@ -4,6 +4,14 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <windows.h>
+
+// remove compilation errors when testing memory leaks
+// with valgrind on unix based systems
+#ifdef __unix__
+#include <string.h>
+#include <unistd.h>
+#endif
 
 #define QUOTE(...) #__VA_ARGS__ // pre-processor to turn content into string
 
@@ -75,7 +83,11 @@ bool is_generating = false;
 void *geminiLoading(void *arg) {
   while (is_generating) {
     printf(".");
+#ifdef _WIN32
     Sleep(500);
+#elif __unix__
+    sleep(500);
+#endif
   }
   printf("\x1b[0m");
 
@@ -83,7 +95,9 @@ void *geminiLoading(void *arg) {
 }
 
 int main(void) {
+#ifdef _WIN32
   enableVirtualTerminal();
+#endif
 
   // bool is_success = true;
   //
@@ -159,7 +173,7 @@ int main(void) {
     pthread_t generate_thread;
 
     is_generating = true;
-    printf("\x1b[32mGenerating response");
+    printf("\x1b[32mThinking");
     pthread_create(&generate_thread, NULL, geminiLoading, NULL);
 
     curl = curl_easy_init();
@@ -217,8 +231,6 @@ int main(void) {
 
       printf("\n\x1b[36mGemini response: %s\x1b[0m\n", text->valuestring);
       cJSON_Delete(mem_res);
-
-      printf("something");
 
       if (res != CURLE_OK) {
         fprintf(stderr, "curl_easy_perform() failed. %s\n",
