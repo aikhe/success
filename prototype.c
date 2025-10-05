@@ -4,11 +4,11 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <windows.h>
+#include <time.h>
 
 // remove compilation errors when testing memory leaks
 // with valgrind on unix based systems
-#ifdef __unix__
+#ifdef __linux__
 #include <string.h>
 #include <unistd.h>
 #endif
@@ -20,6 +20,7 @@ typedef struct Memory {
   size_t size;
 } Memory;
 
+#ifdef _WIN32
 // enable ANSI support for windows cmd
 void enableVirtualTerminal() {
   HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -27,6 +28,15 @@ void enableVirtualTerminal() {
   GetConsoleMode(hOut, &dwMode);
   dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
   SetConsoleMode(hOut, dwMode);
+}
+#endif
+
+void delay(int millisecond) {
+#ifdef _WIN32
+  Sleep(millisecond);
+#elif __linux__
+  usleep(millisecond * 1000);
+#endif
 }
 
 char *read_file(const char *filename) {
@@ -54,7 +64,7 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
   int lineNum = 1;
 
   char *temp = realloc(mem->response, mem->size + total_bytes + 1);
-  if (!ptr) {
+  if (!temp) {
     fprintf(stderr, "[ERROR] Failed to realloc memory. \n");
     return EXIT_FAILURE;
   }
@@ -81,13 +91,11 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
 bool is_generating = false;
 
 void *geminiLoading(void *arg) {
+  printf("\x1b[32mThinking");
+
   while (is_generating) {
     printf(".");
-#ifdef _WIN32
-    Sleep(500);
-#elif __unix__
-    sleep(500);
-#endif
+    delay(500);
   }
   printf("\x1b[0m");
 
@@ -95,6 +103,9 @@ void *geminiLoading(void *arg) {
 }
 
 int main(void) {
+  // ensure unbuffered output for all printf calls
+  setvbuf(stdout, NULL, _IONBF, 0);
+
 #ifdef _WIN32
   enableVirtualTerminal();
 #endif
@@ -148,6 +159,12 @@ int main(void) {
 
       if (strcmp(userPrompt, "0") == 0) {
         printf("[INFO] Exited.\n");
+
+        free(req_body);
+        free(mem.response);
+        cJSON_Delete(env);
+        free(env_json);
+
         break;
       }
 
@@ -173,7 +190,6 @@ int main(void) {
     pthread_t generate_thread;
 
     is_generating = true;
-    printf("\x1b[32mThinking");
     pthread_create(&generate_thread, NULL, geminiLoading, NULL);
 
     curl = curl_easy_init();
@@ -211,9 +227,9 @@ int main(void) {
       curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&mem);
 
       // verification
-      // curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L); // removes SSL
       curl_easy_setopt(curl, CURLOPT_CAINFO,
                        "cacert-2025-09-09.pem"); // set cacert for ssl
+      // curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L); // removes SSL
 
       res = curl_easy_perform(curl);
 
@@ -226,8 +242,6 @@ int main(void) {
       cJSON *parts = cJSON_GetObjectItemCaseSensitive(content, "parts");
       cJSON *first_part = cJSON_GetArrayItem(parts, 0);
       cJSON *text = cJSON_GetObjectItemCaseSensitive(first_part, "text");
-
-      is_generating = false;
 
       printf("\n\x1b[36mGemini response: %s\x1b[0m\n", text->valuestring);
       cJSON_Delete(mem_res);
@@ -248,6 +262,10 @@ int main(void) {
       fprintf(stderr, "Curl initialization failed.\n");
     }
 
+    is_generating = false;
+    pthread_cancel(generate_thread);
+    pthread_join(generate_thread, NULL);
+
     free(env_json);
     cJSON_Delete(env);
     free(req_body);
@@ -255,8 +273,8 @@ int main(void) {
     curl_global_cleanup();
   }
 
-  printf("\n[INFO] Program finished. Press ENTER to exit...\n");
-  getchar();
+  // printf("\n[INFO] Program finished. Press ENTER to exit...\n");
+  // getchar();
 
   return EXIT_SUCCESS;
 }
