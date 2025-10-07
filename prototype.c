@@ -1,3 +1,8 @@
+// define __declspc as empty for native linux build (0or MSVC)
+#ifndef __declspec
+#define __declspec(x)
+#endif
+
 #include <cjson/cJSON.h>
 #include <curl/curl.h>
 #include <pthread.h>
@@ -158,7 +163,7 @@ int main(void) {
       userPrompt[strcspn(userPrompt, "\n")] = '\0';
 
       if (strcmp(userPrompt, "0") == 0) {
-        printf("[INFO] Exited.\n");
+        printf("[INFO] Exited\n");
 
         free(req_body);
         free(mem.response);
