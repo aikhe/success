@@ -7,10 +7,11 @@ all:
 run: all
 	.\prototype
 else
+	# gcc prototype.c -o prototype -pthread -lcurl -lcjson ./lib/libnfd.a $(pkg-config --cflags --libs gtk+-3.0) ./base64.c
 all:
-	gcc prototype.c -o prototype -pthread -lcurl -lcjson ./lib/libnfd.a $(pkg-config --cflags --libs gtk+-3.0) ./base64.c
+	gcc function_calling.c -o function_calling -pthread -lcurl -lcjson ./lib/libnfd.a $$(pkg-config --cflags --libs gtk+-3.0) ./base64.c
 run: all
-	./prototype
+	./function_calling
 endif
 
 sanitize:

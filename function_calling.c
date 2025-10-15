@@ -195,8 +195,19 @@ int main(void) {
   enableVirtualTerminal();
 #endif
 
+  nfdchar_t *outPath = NULL;
+  nfdresult_t result = NFD_OpenDialog("png,jpg;pdf", NULL, &outPath);
+  if (result == NFD_OKAY) {
+    puts("Success!");
+    puts(outPath);
+  } else if (result == NFD_CANCEL) {
+    puts("User pressed cancel.");
+  } else {
+    printf("Error: %s\n", NFD_GetError());
+  }
+
   size_t encoded_len;
-  unsigned char *file_data = read_file_b64("python.pdf", &encoded_len);
+  unsigned char *file_data = read_file_b64(outPath, &encoded_len);
   char *sample_encoded = base64_encode(file_data, encoded_len);
 
   while (1) {
@@ -364,6 +375,7 @@ int main(void) {
     curl_global_cleanup();
   }
 
+  free(outPath);
   free(sample_encoded);
   free(file_data);
 
