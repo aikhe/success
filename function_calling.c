@@ -384,8 +384,8 @@ char *get_file_uri(unsigned char *image_data, long int image_len,
   return result_uri;
 }
 
-char *gemini_request(char *gemini_url, char *file_uri, char *gemini_api_key,
-                     char *fullPrompt, char *file_mime_type) {
+char *gemini_request(char *gemini_url, char **file_uris, char *gemini_api_key,
+                     char *fullPrompt, char **file_mime_types, int file_count) {
   Memory mem = {malloc(1), 0};
 
   cJSON *req_body_json = cJSON_CreateObject();
@@ -397,18 +397,21 @@ char *gemini_request(char *gemini_url, char *file_uri, char *gemini_api_key,
   cJSON *parts = cJSON_CreateArray();
   cJSON_AddItemToObject(content, "parts", parts);
 
-  cJSON *part_file = cJSON_CreateObject();
-  cJSON *file_data = cJSON_CreateObject();
-  cJSON_AddItemToObject(part_file, "file_data", file_data);
-  cJSON_AddStringToObject(file_data, "mime_type", file_mime_type);
-  cJSON_AddStringToObject(file_data, "file_uri", file_uri);
-  cJSON_AddItemToArray(parts, part_file);
+  for (size_t i = 0; i < file_count; i++) {
+    cJSON *part_file = cJSON_CreateObject();
+    cJSON *file_data = cJSON_CreateObject();
+    cJSON_AddItemToObject(part_file, "file_data", file_data);
+    cJSON_AddStringToObject(file_data, "mime_type", file_mime_types[i]);
+    cJSON_AddStringToObject(file_data, "file_uri", file_uris[i]);
+    cJSON_AddItemToArray(parts, part_file);
+  }
 
   cJSON *part_text = cJSON_CreateObject();
   cJSON_AddStringToObject(part_text, "text", fullPrompt);
   cJSON_AddItemToArray(parts, part_text);
 
   char *req_body_json_str = cJSON_Print(req_body_json);
+  // printf("req_body:\n%s\n", req_body_json_str);
 
   CURL *curl;
 
@@ -485,25 +488,6 @@ int main(void) {
   enableVirtualTerminal();
 #endif
 
-  // nfdchar_t *outPath = NULL;
-  // nfdresult_t result = NFD_OpenDialog("png,jpeg,jpg,pdf", NULL, &outPath);
-  // if (result == NFD_OKAY) {
-  //   puts("Success!");
-  //   puts(outPath);
-  // } else if (result == NFD_CANCEL) {
-  //   puts("User pressed cancel.");
-  // } else {
-  //   printf("Error: %s\n", NFD_GetError());
-  // }
-
-  // size_t encoded_len;
-  // unsigned char *file_data = read_file_b64(outPath, &encoded_len);
-  // char *sample_encoded = base64_encode(file_data, encoded_len);
-  // const char *ext = get_file_mime_type(outPath);
-
-  // printf("%ld total bytes\n", encoded_len);
-  // printf("%s\n", ext);
-
   nfdpathset_t pathSet;
   nfdresult_t nfd_res =
       NFD_OpenDialogMultiple("png,jpeg,jpg,pdf", NULL, &pathSet);
@@ -521,7 +505,7 @@ int main(void) {
 
   while (1) {
     char *env_json = read_file("env.json");
-    // printf("[DEBUG] env.json:\n%s\n", env_json);
+
     cJSON *env = cJSON_Parse(env_json);
     if (!env) {
       const char *error_ptr = cJSON_GetErrorPtr();
@@ -583,10 +567,9 @@ int main(void) {
     char **exts = malloc(total_file_num * sizeof(char *));
     char **file_uris = malloc(total_file_num * sizeof(char *));
 
-    size_t i;
-    for (i = 0; i < total_file_num; ++i) {
+    for (size_t i = 0; i < total_file_num; ++i) {
       nfdchar_t *path = NFD_PathSet_GetPath(&pathSet, i);
-      printf("Path %i: %s\n", (int)i, path);
+      // printf("Path %i: %s\n", (int)i, path);
 
       size_t encoded_len;
       unsigned char *file_data = read_file_b64(path, &encoded_len);
@@ -595,51 +578,34 @@ int main(void) {
       char *res_upload_url =
           get_upload_url(encoded_len, gemini_file_url->valuestring,
                          gemini_api_key->valuestring, (char *)ext);
-      printf("res_upload_url: %s\n", res_upload_url);
       char *res_file_uri =
           get_file_uri(file_data, encoded_len, path, res_upload_url,
                        gemini_api_key->valuestring);
-      printf("res_file_uri: %s\n", res_file_uri);
 
       exts[i] = (char *)ext;
       file_uris[i] = res_file_uri;
-
-      // strncat(file_uris, res_file_uri, sizeof(file_uris) - 1);
-      // strncat(exts, ext, sizeof(exts) - 1);
-
-      // free(path);
-      // free(sample_encoded);
-      // free(file_data);
     }
-    NFD_PathSet_Free(&pathSet);
 
     for (size_t j = 0; j < total_file_num; j++) {
       printf("ext %zu: %s\n", j + 1, exts[j]);
       printf("file_uri %zu: %s\n", j + 1, file_uris[j]);
     }
-    // printf("exts: %s\n", exts);
-    // printf("file_uris: %s\n", file_uris);
 
-    // char *res_upload_url =
-    //     get_upload_url(encoded_len, gemini_file_url->valuestring,
-    //                    gemini_api_key->valuestring, (char *)ext);
-    // char *res_file_uri =
-    //     get_file_uri(file_data, encoded_len, outPath, res_upload_url,
-    //                  gemini_api_key->valuestring);
-    char *res_gemini_req =
-        gemini_request(gemini_api_url->valuestring, *file_uris,
-                       gemini_api_key->valuestring, fullPrompt, (char *)exts);
+    char *res_gemini_req = gemini_request(
+        gemini_api_url->valuestring, file_uris, gemini_api_key->valuestring,
+        fullPrompt, exts, total_file_num);
 
     // printf("Upload URL: %s\n", res_upload_url);
     // printf("File URI: %s\n", res_file_uri);
     // printf("gemini_file_url: %s\n", gemini_file_url->valuestring);
-    printf("\033[97mGemini response:\n%s\n", res_gemini_req);
+    printf("\033[97mGemini response:\n%s\033[0m\n", res_gemini_req);
 
     free(env_json);
     cJSON_Delete(env);
     free(mem.response);
     curl_global_cleanup();
   }
+  NFD_PathSet_Free(&pathSet);
 
   return EXIT_SUCCESS;
 }
