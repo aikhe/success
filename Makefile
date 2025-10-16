@@ -8,8 +8,7 @@ run: all
 	.\prototype
 else
 all:
-	gcc prototype.c -o prototype -pthread -lcurl -lcjson ./base64.c
-
+	gcc prototype.c -o prototype -pthread -lcurl -lcjson ./lib/libnfd.a $(pkg-config --cflags --libs gtk+-3.0) ./base64.c
 run: all
 	./prototype
 endif
