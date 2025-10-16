@@ -2,10 +2,10 @@
 
 ifeq ($(OS),Windows_NT)
 all:
-	gcc -Wall -g -D__USE_MINGW_ANSI_STDIO=1 prototype.c -I"./include" -L"./lib" -lcurl -lcjson -lpthread -o prototype
+	gcc -Wall -g -D__USE_MINGW_ANSI_STDIO=1 function_calling.c -I"./include" -L"./lib" -lcurl -lcjson -lpthread ./lib/nfd.lib -lole32 -luuid -o function_calling.exe
 
 run: all
-	.\prototype
+	.\function_calling
 else
 	# gcc prototype.c -o prototype -pthread -lcurl -lcjson ./lib/libnfd.a $(pkg-config --cflags --libs gtk+-3.0) ./base64.c
 all:
