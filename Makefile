@@ -8,7 +8,7 @@ run: all
 	.\prototype
 else
 all:
-	gcc prototype.c -o prototype -pthread -lcurl -lcjson
+	gcc prototype.c -o prototype -pthread -lcurl -lcjson ./base64.c
 
 run: all
 	./prototype

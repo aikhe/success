@@ -1,8 +1,10 @@
 // define __declspc as empty for native linux build (0or MSVC)
+#include <stddef.h>
 #ifndef __declspec
 #define __declspec(x)
 #endif
 
+#include "base64.h"
 #include <cjson/cJSON.h>
 #include <curl/curl.h>
 #include <pthread.h>
@@ -36,6 +38,45 @@ void enableVirtualTerminal() {
 }
 #endif
 
+static const int B64index[256] = {
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  0,
+    0,  0,  0,  0,  0,  0,  0,  62, 63, 62, 62, 63, 52, 53, 54, 55, 56, 57,
+    58, 59, 60, 61, 0,  0,  0,  0,  0,  0,  0,  0,  1,  2,  3,  4,  5,  6,
+    7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 24,
+    25, 0,  0,  0,  0,  63, 0,  26, 27, 28, 29, 30, 31, 32, 33, 34, 35, 36,
+    37, 38, 39, 40, 41, 42, 43, 44, 45, 46, 47, 48, 49, 50, 51};
+
+char *b64decode(const void *data, const size_t len) {
+  unsigned char *p = (unsigned char *)data;
+  int pad = len > 0 && (len % 4 || p[len - 1] == '=');
+  const size_t L = ((len + 3) / 4 - pad) * 4;
+  char *str = malloc(L / 4 * 3 + pad + 1);
+  if (!str)
+    return NULL;
+
+  size_t j = 0;
+  for (size_t i = 0; i < L; i += 4) {
+    int n = B64index[p[i]] << 18 | B64index[p[i + 1]] << 12 |
+            B64index[p[i + 2]] << 6 | B64index[p[i + 3]];
+    str[j++] = n >> 16;
+    str[j++] = n >> 8 & 0xFF;
+    str[j++] = n & 0xFF;
+  }
+  if (pad) {
+    int n = B64index[p[L]] << 18 | B64index[p[L + 1]] << 12;
+    str[j++] = n >> 16;
+
+    if (len > L + 2 && p[L + 2] != '=') {
+      n |= B64index[p[L + 2]] << 6;
+      str[j++] = (n >> 8) & 0xFF;
+    }
+  }
+
+  str[j] = '\0';
+  return str;
+}
+
 void delay(int millisecond) {
 #ifdef _WIN32
   Sleep(millisecond);
@@ -51,14 +92,54 @@ char *read_file(const char *filename) {
 
   fseek(fptr, 0, SEEK_END);  // move position indicator to end
   long length = ftell(fptr); // get length
-  rewind(fptr);              // move position indicator to end
+  rewind(fptr);              // move position indicator to start
 
   char *data = malloc(length + 1); // add 1 for null terminator
-  fread(data, 1, length, fptr);    // this is where data finally gets read
+  fread(data, 1, length,
+        fptr); // this is where data finally gets read and added
   data[length] =
       '\0'; // add null terminator (crucial for printf & other string functions)
   fclose(fptr);
 
+  return data;
+}
+
+char *replace_escaped_ansi(char *input) {
+  const char *pattern = "\\033";
+  const char esc = '\x1b';
+  size_t len = strlen(input);
+  char *output = malloc(len + 1);
+  if (!output)
+    return NULL;
+
+  size_t i = 0, j = 0;
+  while (i < len) {
+    if (strncmp(&input[i], pattern, 4) == 0) {
+      output[j++] = esc;
+      i += 4; // skip over \033
+    } else {
+      output[j++] = input[i++];
+    }
+  }
+  output[j] = '\0';
+  return output;
+}
+
+unsigned char *read_file_b64(const char *filename, size_t *out_len) {
+  FILE *fptr = fopen(filename, "rb");
+  if (!fptr)
+    return NULL;
+
+  fseek(fptr, 0, SEEK_END);  // move position indicator to end
+  long length = ftell(fptr); // get length
+  rewind(fptr);              // move position indicator to start
+
+  unsigned char *data = malloc(length); // add 1 for null terminato-
+  size_t read_len = fread(
+      data, 1, length, fptr); // this is where data finally gets read and added
+  fclose(fptr);
+
+  *out_len = read_len; // updates length
   return data;
 }
 
@@ -115,13 +196,9 @@ int main(void) {
   enableVirtualTerminal();
 #endif
 
-  // bool is_success = true;
-  //
-  // if (!is_success) {
-  //   fprintf(stderr, "[ERROR] Operation failed. \n");
-  //   return EXIT_FAILURE;
-  // }
-  // printf("[INFO] Success succeeded!\n\n");
+  size_t encoded_len;
+  unsigned char *file_data = read_file_b64("python.pdf", &encoded_len);
+  char *sample_encoded = base64_encode(file_data, encoded_len);
 
   while (1) {
     char *env_json = read_file("env.json");
@@ -148,15 +225,12 @@ int main(void) {
     if (!gemini_api_url->valuestring) {
       fprintf(stderr, "GEMINI_API_URL environment variable not set.\n");
     }
-    // printf("API: %s\n", gemini_api_key->valuestring);
-    // printf("URL: %s\n", gemini_api_url->valuestring);
 
     CURL *curl;
     CURLcode res;
 
     Memory mem = {malloc(1), 0};
 
-    // char *req_body = read_file("gemini_req_body.json");
     char userPrompt[256];
     printf("Enter your prompt [enter 0 to exit]: ");
     if (fgets(userPrompt, sizeof(userPrompt), stdin) != NULL) {
@@ -171,24 +245,39 @@ int main(void) {
 
         break;
       }
-
-      printf("[INFO] User prompt: %s\n", userPrompt);
     }
+    char *systemPrompt =
+        "This is running on a terminal so format it to look good, no markdown "
+        "formatting like bolds with double asterisk cause im getting the "
+        "response and viewing it via terminal and no markdown formatting will "
+        "work, also format it with colors with ANSI format like this \\033[97m";
+    char fullPrompt[512];
+    snprintf(fullPrompt, 512, "System Prompt: %s\nrnUser Prompt: %s",
+             systemPrompt, userPrompt);
+
     cJSON *req_body_json = cJSON_CreateObject();
     cJSON *contents = cJSON_CreateArray();
     cJSON_AddItemToObject(req_body_json, "contents", contents);
+
     cJSON *content = cJSON_CreateObject();
     cJSON_AddItemToArray(contents, content);
     cJSON *parts = cJSON_CreateArray();
     cJSON_AddItemToObject(content, "parts", parts);
-    cJSON *part = cJSON_CreateObject();
-    cJSON_AddItemToArray(parts, part);
-    cJSON *text = cJSON_CreateString(userPrompt);
-    cJSON_AddItemToObject(part, "text", text);
 
-    char *req_body_json_str = cJSON_PrintUnformatted(req_body_json);
-    printf("Request body:\n");
-    printf("%s\n", req_body_json_str);
+    cJSON *part_file = cJSON_CreateObject();
+    cJSON *inline_data = cJSON_CreateObject();
+    cJSON_AddItemToObject(part_file, "inline_data", inline_data);
+    cJSON_AddStringToObject(inline_data, "mime_type", "application/pdf");
+    cJSON_AddStringToObject(inline_data, "data", sample_encoded);
+    cJSON_AddItemToArray(parts, part_file);
+
+    cJSON *part_text = cJSON_CreateObject();
+    cJSON_AddStringToObject(part_text, "text", fullPrompt);
+    cJSON_AddItemToArray(parts, part_text);
+
+    char *req_body_json_str = cJSON_Print(req_body_json);
+    // printf("Request body:\n");
+    // printf("%s\n", req_body_json_str);
 
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
@@ -198,9 +287,6 @@ int main(void) {
     pthread_create(&generate_thread, NULL, geminiLoading, NULL);
 
     curl = curl_easy_init();
-
-    // printf("\ncurl handle address: %p\n\n", curl);
-
     if (curl) {
       struct curl_slist *list = NULL;
       char auth_header[512];
@@ -209,7 +295,6 @@ int main(void) {
 
       snprintf(auth_header, sizeof(auth_header), "%s %s", header_name,
                gemini_api_key->valuestring);
-      // printf("%s\n", auth_header);
 
       list = curl_slist_append(list, auth_header);
       list = curl_slist_append(list, content_type);
@@ -225,6 +310,7 @@ int main(void) {
       // curl_easy_setopt(curl, CURLOPT_URL, "https://jacobsorber.com");
       curl_easy_setopt(curl, CURLOPT_URL, gemini_api_url->valuestring);
       curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
+      curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
       curl_easy_setopt(curl, CURLOPT_POSTFIELDS, req_body_json_str);
       curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE,
                        (long)strlen(req_body_json_str));
@@ -248,7 +334,9 @@ int main(void) {
       cJSON *first_part = cJSON_GetArrayItem(parts, 0);
       cJSON *text = cJSON_GetObjectItemCaseSensitive(first_part, "text");
 
-      printf("\n\033[97mGemini response: %s\x1b[0m\n", text->valuestring);
+      char *cleaned_text = replace_escaped_ansi(text->valuestring);
+      printf("\n\033[97mGemini response:\n%s\x1b[0m\n", cleaned_text);
+      free(cleaned_text);
       cJSON_Delete(mem_res);
 
       if (res != CURLE_OK) {
@@ -277,8 +365,8 @@ int main(void) {
     curl_global_cleanup();
   }
 
-  // printf("\n[INFO] Program finished. Press ENTER to exit...\n");
-  // getchar();
+  free(sample_encoded);
+  free(file_data);
 
   return EXIT_SUCCESS;
 }
