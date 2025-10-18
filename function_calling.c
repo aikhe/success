@@ -187,6 +187,71 @@ CallType set_call_type(char *call_type) {
   return ct;
 }
 
+void initial_request(long int image_len, char *gemini_file_url,
+                     char *gemini_api_key) {
+  Memory mem = {malloc(1), 0};
+
+  CURL *curl;
+  CURLcode res;
+
+  curl = curl_easy_init();
+
+  struct curl_slist *list = NULL;
+  char auth_header[512];
+  char *api_key = "x-goog-api-key:";
+  char *upload_protocol = "X-Goog-Upload-Protocol: resumable";
+  char *upload_command = "X-Goog-Upload-Command: start";
+  char length[512];
+  char *upload_header_content_length = "X-Goog-Upload-Header-Content-Length:";
+  char type[512];
+  char *upload_header_content_type = "X-Goog-Upload-Header-Content-Type:";
+  char *content_type = "Content-Type: application/json";
+
+  snprintf(auth_header, sizeof(auth_header), "%s %s", api_key, gemini_api_key);
+  snprintf(length, sizeof(length), "%s %ld", upload_header_content_length,
+           image_len);
+  snprintf(type, sizeof(type), "%s %s", upload_header_content_type,
+           "image/jpeg");
+
+  list = curl_slist_append(list, auth_header);
+  list = curl_slist_append(list, upload_protocol);
+  list = curl_slist_append(list, upload_command);
+  list = curl_slist_append(list, length);
+  list = curl_slist_append(list, type);
+  list = curl_slist_append(list, content_type);
+
+  const char *req_json = "{'file': {'display_name': 'IMAGE'}}";
+
+  // reduce latency
+  curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 5000L);
+  curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
+  curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1L);
+
+  // verbose logging
+  curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+
+  curl_easy_setopt(curl, CURLOPT_URL, gemini_file_url);
+  curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDS, req_json);
+  curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE, (long)strlen(req_json));
+  curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, write_callback);
+  curl_easy_setopt(curl, CURLOPT_HEADERDATA, (void *)&mem);
+
+  // verification
+  curl_easy_setopt(curl, CURLOPT_CAINFO,
+                   "cacert-2025-09-09.pem"); // set cacert for ssl
+
+  res = curl_easy_perform(curl);
+
+  printf("\nmem->response address: %p\n", &mem);
+  printf("\nFrom mem->response:\n%s\n", mem.response);
+
+  curl_slist_free_all(list);
+  curl_easy_cleanup(curl);
+  free(mem.response);
+  curl_global_cleanup();
+}
+
 int main(void) {
   // ensure unbuffered output for all printf calls
   setvbuf(stdout, NULL, _IONBF, 0);
@@ -209,6 +274,8 @@ int main(void) {
   size_t encoded_len;
   unsigned char *file_data = read_file_b64(outPath, &encoded_len);
   char *sample_encoded = base64_encode(file_data, encoded_len);
+
+  printf("%ld total bytes\n", encoded_len);
 
   while (1) {
     char *env_json = read_file("env.json");
@@ -236,9 +303,6 @@ int main(void) {
       fprintf(stderr, "GEMINI_API_URL environment variable not set.\n");
     }
 
-    CURL *curl;
-    CURLcode res;
-
     Memory mem = {malloc(1), 0};
 
     char userPrompt[256];
@@ -265,6 +329,12 @@ int main(void) {
     snprintf(fullPrompt, 512, "System Prompt: %s\nrnUser Prompt: %s",
              systemPrompt, userPrompt);
 
+    // file api
+    cJSON *gemini_file_url =
+        cJSON_GetObjectItemCaseSensitive(env, "GEMINI_FILE_URL");
+    initial_request(encoded_len, gemini_file_url->valuestring,
+                    gemini_api_key->valuestring);
+
     cJSON *req_body_json = cJSON_CreateObject();
     cJSON *contents = cJSON_CreateArray();
     cJSON_AddItemToObject(req_body_json, "contents", contents);
@@ -289,13 +359,15 @@ int main(void) {
     // printf("Request body:\n");
     // printf("%s\n", req_body_json_str);
 
-    curl_global_init(CURL_GLOBAL_DEFAULT);
-
     pthread_t generate_thread;
 
     is_generating = true;
     pthread_create(&generate_thread, NULL, geminiLoading, NULL);
 
+    CURL *curl;
+    CURLcode res;
+
+    curl_global_init(CURL_GLOBAL_DEFAULT);
     curl = curl_easy_init();
     if (curl) {
       struct curl_slist *list = NULL;
@@ -320,7 +392,6 @@ int main(void) {
       // curl_easy_setopt(curl, CURLOPT_URL, "https://jacobsorber.com");
       curl_easy_setopt(curl, CURLOPT_URL, gemini_api_url->valuestring);
       curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
-      curl_easy_setopt(curl, CURLOPT_CUSTOMREQUEST, "POST");
       curl_easy_setopt(curl, CURLOPT_POSTFIELDS, req_body_json_str);
       curl_easy_setopt(curl, CURLOPT_POSTFIELDSIZE,
                        (long)strlen(req_body_json_str));

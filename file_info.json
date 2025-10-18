@@ -1,0 +1,15 @@
+{
+  "file": {
+    "name": "files/3j8r014iayxv",
+    "displayName": "IMAGE",
+    "mimeType": "image/png",
+    "sizeBytes": "593244",
+    "createTime": "2025-10-19T12:02:35.713572Z",
+    "updateTime": "2025-10-19T12:02:35.713572Z",
+    "expirationTime": "2025-10-21T12:02:34.546304800Z",
+    "sha256Hash": "Yjg2NGZjODEzOTRkZjJjODdiYWZlZjNkMWI1ZjdlNmI0Y2IwNzFlNTU0MTNiYmI1YTQ4MGFhMTYxNTlhMTkzYw==",
+    "uri": "https://generativelanguage.googleapis.com/v1beta/files/3j8r014iayxv",
+    "state": "ACTIVE",
+    "source": "UPLOADED"
+  }
+}
