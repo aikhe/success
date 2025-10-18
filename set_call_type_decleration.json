@@ -1,0 +1,15 @@
+{
+  "name": "set_call_type",
+  "description": "Set gemini api request type base on user query.",
+  "parameters": {
+    "type": "object",
+    "properties": {
+      "call_type": {
+        "type": "string",
+        "enum": ["document", "image", "text"],
+        "description": "Type of user query and gemini api to to be called, which can be a `document`, `cool`, or `warm`"
+      }
+    },
+    "required": ["call_type"]
+  }
+}

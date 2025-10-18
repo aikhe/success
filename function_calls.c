@@ -66,7 +66,6 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
                              void *userdata) {
   size_t total_bytes = size * nmemb;
   struct Memory *mem = (struct Memory *)userdata;
-  int lineNum = 1;
 
   char *temp = realloc(mem->response, mem->size + total_bytes + 1);
   if (!temp) {
@@ -78,17 +77,6 @@ static size_t write_callback(char *ptr, size_t size, size_t nmemb,
   memcpy(&(mem->response[mem->size]), ptr, total_bytes);
   mem->size += total_bytes;
   mem->response[mem->size] = '\0';
-
-  // printf("total chunk total_bytes: %zu\n", total_bytes);
-  // printf("%d:\t", lineNum);
-  for (int i = 0; i < total_bytes; i++) {
-    // printf("%c", ptr[i]);
-    if (ptr[i] == '\n') {
-      lineNum++;
-      // printf("%d:\t", lineNum);
-    }
-  }
-  // printf("\n\n");
 
   return total_bytes;
 }
@@ -107,6 +95,16 @@ void *geminiLoading(void *arg) {
   return NULL;
 }
 
+typedef struct CallType {
+  char *call_type;
+} CallType;
+
+CallType set_call_type(char *call_type) {
+  CallType ct = {.call_type = call_type};
+
+  return ct;
+}
+
 int main(void) {
   // ensure unbuffered output for all printf calls
   setvbuf(stdout, NULL, _IONBF, 0);
@@ -114,14 +112,6 @@ int main(void) {
 #ifdef _WIN32
   enableVirtualTerminal();
 #endif
-
-  // bool is_success = true;
-  //
-  // if (!is_success) {
-  //   fprintf(stderr, "[ERROR] Operation failed. \n");
-  //   return EXIT_FAILURE;
-  // }
-  // printf("[INFO] Success succeeded!\n\n");
 
   while (1) {
     char *env_json = read_file("env.json");
@@ -156,7 +146,7 @@ int main(void) {
 
     Memory mem = {malloc(1), 0};
 
-    // char *req_body = read_file("gemini_req_body.json");
+    char *req_body = read_file("gemini_req_body.json");
     char userPrompt[256];
     printf("Enter your prompt [enter 0 to exit]: ");
     if (fgets(userPrompt, sizeof(userPrompt), stdin) != NULL) {
@@ -165,6 +155,7 @@ int main(void) {
       if (strcmp(userPrompt, "0") == 0) {
         printf("[INFO] Exited\n");
 
+        free(req_body);
         free(mem.response);
         cJSON_Delete(env);
         free(env_json);
@@ -174,21 +165,20 @@ int main(void) {
 
       printf("[INFO] User prompt: %s\n", userPrompt);
     }
-    cJSON *req_body_json = cJSON_CreateObject();
-    cJSON *contents = cJSON_CreateArray();
-    cJSON_AddItemToObject(req_body_json, "contents", contents);
-    cJSON *content = cJSON_CreateObject();
-    cJSON_AddItemToArray(contents, content);
-    cJSON *parts = cJSON_CreateArray();
-    cJSON_AddItemToObject(content, "parts", parts);
-    cJSON *part = cJSON_CreateObject();
-    cJSON_AddItemToArray(parts, part);
-    cJSON *text = cJSON_CreateString(userPrompt);
-    cJSON_AddItemToObject(part, "text", text);
+    cJSON *req_body_json = cJSON_Parse(req_body);
+    cJSON *contents =
+        cJSON_GetObjectItemCaseSensitive(req_body_json, "contents");
+    cJSON *contents_arr = cJSON_GetArrayItem(contents, 0);
+    cJSON *parts = cJSON_GetObjectItemCaseSensitive(contents_arr, "parts");
+    cJSON *parts_arr = cJSON_GetArrayItem(parts, 0);
+    cJSON *text = cJSON_GetObjectItemCaseSensitive(parts_arr, "text");
+    cJSON_SetValuestring(text, userPrompt);
 
     char *req_body_json_str = cJSON_PrintUnformatted(req_body_json);
-    printf("Request body:\n");
-    printf("%s\n", req_body_json_str);
+    // printf("Request body:\n");
+    // printf("%s\n", req_body);
+    // printf("Updated request body:\n");
+    // printf("%s\n\n", req_body_json_str);
 
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
@@ -273,6 +263,7 @@ int main(void) {
 
     free(env_json);
     cJSON_Delete(env);
+    free(req_body);
     free(mem.response);
     curl_global_cleanup();
   }

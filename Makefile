@@ -1,4 +1,4 @@
-.PHONY: all run sanitize clean sanitize-run
+.PHONY: all run sanitize sanitize-run clean 
 
 ifeq ($(OS),Windows_NT)
 all:
