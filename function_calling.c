@@ -78,6 +78,25 @@ char *b64decode(const void *data, const size_t len) {
   return str;
 }
 
+const char *get_file_mime_type(const char *filename) {
+  const char *dot = strrchr(filename, '.');
+  if (!dot || dot == filename)
+    return NULL;
+
+  char *ext = (char *)dot + 1;
+
+  if (strcmp(ext, "png") == 0)
+    return "image/png";
+  else if (strcmp(ext, "jpeg") == 0 || strcmp(ext, "jpg") == 0)
+    return "image/jpeg";
+  else if (strcmp(ext, "pdf") == 0)
+    return "application/pdf";
+  else
+    printf("[Error] Invalid file formats.");
+
+  return NULL;
+}
+
 void delay(int millisecond) {
 #ifdef _WIN32
   Sleep(millisecond);
@@ -242,7 +261,7 @@ char *grep_string(const char *data) {
 }
 
 char *get_upload_url(long int image_len, char *gemini_file_url,
-                     char *gemini_api_key) {
+                     char *gemini_api_key, char *file_mime_type) {
   Memory mem = {malloc(1), 0};
 
   CURL *curl;
@@ -265,7 +284,7 @@ char *get_upload_url(long int image_len, char *gemini_file_url,
   snprintf(length, sizeof(length), "%s %ld", upload_header_content_length,
            image_len);
   snprintf(type, sizeof(type), "%s %s", upload_header_content_type,
-           "image/png");
+           file_mime_type);
 
   list = curl_slist_append(list, auth_header);
   list = curl_slist_append(list, upload_protocol);
@@ -366,7 +385,7 @@ char *get_file_uri(unsigned char *image_data, long int image_len,
 }
 
 char *gemini_request(char *gemini_url, char *file_uri, char *gemini_api_key,
-                     char *fullPrompt) {
+                     char *fullPrompt, char *file_mime_type) {
   Memory mem = {malloc(1), 0};
 
   cJSON *req_body_json = cJSON_CreateObject();
@@ -381,7 +400,7 @@ char *gemini_request(char *gemini_url, char *file_uri, char *gemini_api_key,
   cJSON *part_file = cJSON_CreateObject();
   cJSON *file_data = cJSON_CreateObject();
   cJSON_AddItemToObject(part_file, "file_data", file_data);
-  cJSON_AddStringToObject(file_data, "mime_type", "image/png");
+  cJSON_AddStringToObject(file_data, "mime_type", file_mime_type);
   cJSON_AddStringToObject(file_data, "file_uri", file_uri);
   cJSON_AddItemToArray(parts, part_file);
 
@@ -390,8 +409,6 @@ char *gemini_request(char *gemini_url, char *file_uri, char *gemini_api_key,
   cJSON_AddItemToArray(parts, part_text);
 
   char *req_body_json_str = cJSON_Print(req_body_json);
-  // printf("Request body:\n");
-  // printf("%s\n", req_body_json_str);
 
   CURL *curl;
 
@@ -482,8 +499,10 @@ int main(void) {
   size_t encoded_len;
   unsigned char *file_data = read_file_b64(outPath, &encoded_len);
   char *sample_encoded = base64_encode(file_data, encoded_len);
+  const char *ext = get_file_mime_type(outPath);
 
   printf("%ld total bytes\n", encoded_len);
+  printf("%s\n", ext);
 
   while (1) {
     char *env_json = read_file("env.json");
@@ -543,15 +562,15 @@ int main(void) {
     // file api
     cJSON *gemini_file_url =
         cJSON_GetObjectItemCaseSensitive(env, "GEMINI_FILE_URL");
-    char *res_upload_url = get_upload_url(
-        encoded_len, gemini_file_url->valuestring, gemini_api_key->valuestring);
-    printf("%s", res_upload_url);
+    char *res_upload_url =
+        get_upload_url(encoded_len, gemini_file_url->valuestring,
+                       gemini_api_key->valuestring, (char *)ext);
     char *res_file_uri =
         get_file_uri(file_data, encoded_len, outPath, res_upload_url,
                      gemini_api_key->valuestring);
     char *res_gemini_req =
         gemini_request(gemini_api_url->valuestring, res_file_uri,
-                       gemini_api_key->valuestring, fullPrompt);
+                       gemini_api_key->valuestring, fullPrompt, (char *)ext);
 
     // printf("Upload URL: %s\n", res_upload_url);
     // printf("File URI: %s\n", res_file_uri);
