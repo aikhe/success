@@ -187,6 +187,75 @@ CallType set_call_type(char *call_type) {
   return ct;
 }
 
+char *grep_string(const char *data) {
+  // Returns NULL if given string is empty
+  if (*data == '\0')
+    return NULL;
+
+  const char *line_start = data;
+  const char *fo;
+  char line[1024];
+
+  // Well just loop when theres new line
+  while ((fo = strchr(line_start, '\n')) != NULL) {
+    // Gets length of first occurrence to know where to cut the first line
+    size_t line_len = fo - line_start;
+
+    // limit line_len to compliment size of line and avoid overflow
+    if (line_len >= sizeof(line)) {
+      line_len = sizeof(line) - 1;
+    }
+
+    memcpy(line, line_start, line_len);
+    // Cut line
+    line[line_len] = '\0';
+
+    // if printf ("line: %s\n\n", line)
+    //   ;
+
+    // Move to next line
+    line_start = fo + 1;
+  }
+
+  printf("data: %s\n\n", data);
+  printf("asterisk: %c\n\n", *data);
+
+  return NULL;
+}
+
+char *idk(const char *data) {
+  if (data == NULL || *data == '\0')
+    return NULL;
+
+  const char *line_start = data;
+  const char *newline;
+  char line[1024]; // temporary buffer for one line
+
+  while ((newline = strchr(line_start, '\n')) != NULL) {
+    size_t len = newline - line_start;
+
+    // limit line length to prevent overflow
+    if (len >= sizeof(line))
+      len = sizeof(line) - 1;
+
+    memcpy(line, line_start, len);
+    line[len] = '\0'; // terminate the line
+
+    // Now "line" contains one line of the input text
+    // printf("Line: %s\n", line);
+
+    // Example: check if line contains "x-goog-upload-url"
+    if (strstr(line, "x-goog-upload-url:") != NULL) {
+      printf("✅ Found upload URL line:\n%s\n", line);
+    }
+
+    // move to next line
+    line_start = newline + 1;
+  }
+
+  return NULL;
+}
+
 void initial_request(long int image_len, char *gemini_file_url,
                      char *gemini_api_key) {
   Memory mem = {malloc(1), 0};
@@ -228,7 +297,7 @@ void initial_request(long int image_len, char *gemini_file_url,
   curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1L);
 
   // verbose logging
-  curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+  // curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 
   curl_easy_setopt(curl, CURLOPT_URL, gemini_file_url);
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
@@ -243,8 +312,10 @@ void initial_request(long int image_len, char *gemini_file_url,
 
   res = curl_easy_perform(curl);
 
-  printf("\nmem->response address: %p\n", &mem);
+  // printf("\nmem->response address: %p\n", &mem);
   printf("\nFrom mem->response:\n%s\n", mem.response);
+
+  grep_string(mem.response);
 
   curl_slist_free_all(list);
   curl_easy_cleanup(curl);
@@ -330,10 +401,10 @@ int main(void) {
              systemPrompt, userPrompt);
 
     // file api
-    cJSON *gemini_file_url =
-        cJSON_GetObjectItemCaseSensitive(env, "GEMINI_FILE_URL");
-    initial_request(encoded_len, gemini_file_url->valuestring,
-                    gemini_api_key->valuestring);
+    // cJSON *gemini_file_url =
+    //     cJSON_GetObjectItemCaseSensitive(env, "GEMINI_FILE_URL");
+    // initial_request(encoded_len, gemini_file_url->valuestring,
+    //                 gemini_api_key->valuestring);
 
     cJSON *req_body_json = cJSON_CreateObject();
     cJSON *contents = cJSON_CreateArray();
