@@ -193,13 +193,14 @@ char *grep_string(const char *data) {
     return NULL;
 
   const char *line_start = data;
+  const char *new_line;
   const char *fo;
   char line[1024];
 
   // Well just loop when theres new line
-  while ((fo = strchr(line_start, '\n')) != NULL) {
+  while ((new_line = strchr(line_start, '\n')) != NULL) {
     // Gets length of first occurrence to know where to cut the first line
-    size_t line_len = fo - line_start;
+    size_t line_len = new_line - line_start;
 
     // limit line_len to compliment size of line and avoid overflow
     if (line_len >= sizeof(line)) {
@@ -210,47 +211,17 @@ char *grep_string(const char *data) {
     // Cut line
     line[line_len] = '\0';
 
-    // if printf ("line: %s\n\n", line)
-    //   ;
+    // this is it!
+    const char *fo = strstr(line, "x-goog-upload-url:");
+    if (fo != NULL) {
+      printf("Found upload URL line:\n%s\nend\n", line);
 
-    // Move to next line
-    line_start = fo + 1;
-  }
-
-  printf("data: %s\n\n", data);
-  printf("asterisk: %c\n\n", *data);
-
-  return NULL;
-}
-
-char *idk(const char *data) {
-  if (data == NULL || *data == '\0')
-    return NULL;
-
-  const char *line_start = data;
-  const char *newline;
-  char line[1024]; // temporary buffer for one line
-
-  while ((newline = strchr(line_start, '\n')) != NULL) {
-    size_t len = newline - line_start;
-
-    // limit line length to prevent overflow
-    if (len >= sizeof(line))
-      len = sizeof(line) - 1;
-
-    memcpy(line, line_start, len);
-    line[len] = '\0'; // terminate the line
-
-    // Now "line" contains one line of the input text
-    // printf("Line: %s\n", line);
-
-    // Example: check if line contains "x-goog-upload-url"
-    if (strstr(line, "x-goog-upload-url:") != NULL) {
-      printf("✅ Found upload URL line:\n%s\n", line);
+      // returns a newly allocated memory for the url string
+      return strdup(line);
     }
 
-    // move to next line
-    line_start = newline + 1;
+    // Move to next line
+    line_start = new_line + 1;
   }
 
   return NULL;
@@ -315,7 +286,9 @@ void initial_request(long int image_len, char *gemini_file_url,
   // printf("\nmem->response address: %p\n", &mem);
   printf("\nFrom mem->response:\n%s\n", mem.response);
 
-  grep_string(mem.response);
+  char *res_url = grep_string(mem.response);
+
+  printf("Result: %s\n", res_url);
 
   curl_slist_free_all(list);
   curl_easy_cleanup(curl);
@@ -397,14 +370,14 @@ int main(void) {
         "response and viewing it via terminal and no markdown formatting will "
         "work, also format it with colors with ANSI format like this \\033[97m";
     char fullPrompt[512];
-    snprintf(fullPrompt, 512, "System Prompt: %s\nrnUser Prompt: %s",
+    snprintf(fullPrompt, 512, "System Prompt: %s\nUser Prompt: %s",
              systemPrompt, userPrompt);
 
     // file api
-    // cJSON *gemini_file_url =
-    //     cJSON_GetObjectItemCaseSensitive(env, "GEMINI_FILE_URL");
-    // initial_request(encoded_len, gemini_file_url->valuestring,
-    //                 gemini_api_key->valuestring);
+    cJSON *gemini_file_url =
+        cJSON_GetObjectItemCaseSensitive(env, "GEMINI_FILE_URL");
+    initial_request(encoded_len, gemini_file_url->valuestring,
+                    gemini_api_key->valuestring);
 
     cJSON *req_body_json = cJSON_CreateObject();
     cJSON *contents = cJSON_CreateArray();
