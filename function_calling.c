@@ -397,7 +397,11 @@ char *gemini_request(char *gemini_url, char **file_uris, char *gemini_api_key,
   cJSON *parts = cJSON_CreateArray();
   cJSON_AddItemToObject(content, "parts", parts);
 
+  // printf("im here foo\n");
+  // printf("file_count: %d\n", file_count);
+
   for (size_t i = 0; i < file_count; i++) {
+    printf("im here loop\n");
     cJSON *part_file = cJSON_CreateObject();
     cJSON *file_data = cJSON_CreateObject();
     cJSON_AddItemToObject(part_file, "file_data", file_data);
@@ -496,125 +500,141 @@ int main(void) {
   enableVirtualTerminal();
 #endif
 
-  nfdpathset_t pathSet;
-  nfdresult_t nfd_res =
-      NFD_OpenDialogMultiple("png,jpeg,jpg,pdf", NULL, &pathSet);
-  if (nfd_res == NFD_OKAY) {
-    size_t i;
-    for (i = 0; i < NFD_PathSet_GetCount(&pathSet); ++i) {
-      nfdchar_t *path = NFD_PathSet_GetPath(&pathSet, i);
-      printf("Path %i: %s\n", (int)i, path);
+  char *env_json = read_file("env.json");
+
+  cJSON *env = cJSON_Parse(env_json);
+  if (!env) {
+    const char *error_ptr = cJSON_GetErrorPtr();
+
+    if (error_ptr) {
+      fprintf(stderr, "[ERROR] Error parsing JSON at %s\n", error_ptr);
     }
-  } else if (nfd_res == NFD_CANCEL) {
-    puts("User pressed cancel.");
-  } else {
-    printf("Error: %s\n", NFD_GetError());
+
+    free(env_json);
+    return EXIT_FAILURE;
   }
 
+  cJSON *gemini_api_key =
+      cJSON_GetObjectItemCaseSensitive(env, "GEMINI_API_KEY");
+  if (!gemini_api_key->valuestring) {
+    fprintf(stderr, "GEMINI_API_KEY environment variable not set.\n");
+  }
+  cJSON *gemini_api_url =
+      cJSON_GetObjectItemCaseSensitive(env, "GEMINI_API_URL");
+  if (!gemini_api_url->valuestring) {
+    fprintf(stderr, "GEMINI_API_URL environment variable not set.\n");
+  }
+  cJSON *gemini_file_url =
+      cJSON_GetObjectItemCaseSensitive(env, "GEMINI_FILE_URL");
+  if (!gemini_file_url->valuestring) {
+    fprintf(stderr, "GEMINI_FILE_URL environment variable not set.\n");
+  }
+
+  char *systemPrompt =
+      "This is running on a terminal so format it to look good, no "
+      "markdown "
+      "formatting like bolds with double asterisk cause im getting the "
+      "response and viewing it via terminal and no markdown formatting "
+      "will "
+      "work, also format it with colors with ANSI format like this "
+      "\\033[97m ascii utlize the background and foreground colors, bolds, "
+      "italics, etc.";
+  char userPrompt[256];
+  char fullPrompt[512];
+
+  nfdresult_t nfd_res = NFD_CANCEL;
+  nfdpathset_t pathSet = {0};
+
   while (1) {
-    char *env_json = read_file("env.json");
+    int total_file_num = 0;
 
-    cJSON *env = cJSON_Parse(env_json);
-    if (!env) {
-      const char *error_ptr = cJSON_GetErrorPtr();
-
-      if (error_ptr) {
-        fprintf(stderr, "[ERROR] Error parsing JSON at %s\n", error_ptr);
-      }
-
-      free(env_json);
-      return EXIT_FAILURE;
-    }
-
-    cJSON *gemini_api_key =
-        cJSON_GetObjectItemCaseSensitive(env, "GEMINI_API_KEY");
-    if (!gemini_api_key->valuestring) {
-      fprintf(stderr, "GEMINI_API_KEY environment variable not set.\n");
-    }
-    cJSON *gemini_api_url =
-        cJSON_GetObjectItemCaseSensitive(env, "GEMINI_API_URL");
-    if (!gemini_api_url->valuestring) {
-      fprintf(stderr, "GEMINI_API_URL environment variable not set.\n");
-    }
-
-    Memory mem = {malloc(1), 0};
-
-    char userPrompt[256];
-    printf("Enter your prompt [enter 0 to exit]: ");
+    printf("Enter your prompt [1 to attach files, enter 0 to exit]: ");
     if (fgets(userPrompt, sizeof(userPrompt), stdin) != NULL) {
       userPrompt[strcspn(userPrompt, "\n")] = '\0';
 
       if (strcmp(userPrompt, "0") == 0) {
         printf("[INFO] Exited\n");
-
-        free(mem.response);
-        cJSON_Delete(env);
-        free(env_json);
-
         break;
+      } else if (strcmp(userPrompt, "1") == 0) {
+        nfd_res = NFD_OpenDialogMultiple("png,jpeg,jpg,pdf", NULL, &pathSet);
+
+        for (size_t i = 0; i < NFD_PathSet_GetCount(&pathSet); ++i) {
+          nfdchar_t *path = NFD_PathSet_GetPath(&pathSet, i);
+          printf("Path %i: %s\n", (int)i, path);
+        }
+
+        continue;
       }
     }
-    char *systemPrompt =
-        "This is running on a terminal so format it to look good, no "
-        "markdown "
-        "formatting like bolds with double asterisk cause im getting the "
-        "response and viewing it via terminal and no markdown formatting "
-        "will "
-        "work, also format it with colors with ANSI format like this "
-        "\\033[97m ascii utlize the background and foreground colors, bolds, "
-        "italics, etc.";
-    char fullPrompt[512];
     snprintf(fullPrompt, 512, "System Prompt: %s\nUser Prompt: %s",
              systemPrompt, userPrompt);
 
-    // file api
-    cJSON *gemini_file_url =
-        cJSON_GetObjectItemCaseSensitive(env, "GEMINI_FILE_URL");
+    char **exts = NULL;
+    char **file_uris = NULL;
+    char *res_gemini_req = NULL;
 
-    size_t total_file_num = NFD_PathSet_GetCount(&pathSet);
+    if (nfd_res == NFD_OKAY) {
+      total_file_num = NFD_PathSet_GetCount(&pathSet);
 
-    char **exts = malloc(total_file_num * sizeof(char *));
-    char **file_uris = malloc(total_file_num * sizeof(char *));
+      printf("%d\n", total_file_num);
 
-    for (size_t i = 0; i < total_file_num; ++i) {
-      nfdchar_t *path = NFD_PathSet_GetPath(&pathSet, i);
-      // printf("Path %i: %s\n", (int)i, path);
+      int capacity = 0;
 
-      size_t encoded_len;
-      unsigned char *file_data = read_file_b64(path, &encoded_len);
-      const char *ext = get_file_mime_type(path);
+      for (size_t i = 0; i < total_file_num; ++i) {
+        nfdchar_t *path = NFD_PathSet_GetPath(&pathSet, i);
 
-      char *res_upload_url =
-          get_upload_url(encoded_len, gemini_file_url->valuestring,
-                         gemini_api_key->valuestring, (char *)ext);
-      char *res_file_uri =
-          get_file_uri(file_data, encoded_len, path, res_upload_url,
-                       gemini_api_key->valuestring);
+        size_t encoded_len;
+        unsigned char *file_data = read_file_b64(path, &encoded_len);
+        const char *ext = get_file_mime_type(path);
 
-      exts[i] = (char *)ext;
-      file_uris[i] = res_file_uri;
+        // file api
+        char *res_upload_url =
+            get_upload_url(encoded_len, gemini_file_url->valuestring,
+                           gemini_api_key->valuestring, (char *)ext);
+        char *res_file_uri =
+            get_file_uri(file_data, encoded_len, path, res_upload_url,
+                         gemini_api_key->valuestring);
+        // printf("Upload URL: %s\n", res_upload_url);
+        // printf("File URI: %s\n", res_file_uri);
+
+        capacity = (capacity == 0) ? 1 : (capacity + 1);
+        printf("capacity: %d\n", capacity);
+        printf("exts pointer: %p\n", &exts);
+        char **new_ext = realloc(exts, (capacity) * sizeof(char *));
+        printf("im here\n");
+        char **new_file_uris = realloc(file_uris, (capacity) * sizeof(char *));
+        exts = new_ext;
+        file_uris = new_file_uris;
+
+        exts[i] = (char *)ext;
+        file_uris[i] = res_file_uri;
+      }
+
+      for (size_t j = 0; j < total_file_num; j++) {
+        printf("ext %zu: %s\n", j + 1, exts[j]);
+        printf("file_uri %zu: %s\n", j + 1, file_uris[j]);
+      }
+    } else if (nfd_res == NFD_CANCEL) {
+      puts("User pressed cancel.");
+    } else {
+      printf("Error: %s\n", NFD_GetError());
     }
 
-    for (size_t j = 0; j < total_file_num; j++) {
-      printf("ext %zu: %s\n", j + 1, exts[j]);
-      printf("file_uri %zu: %s\n", j + 1, file_uris[j]);
-    }
+    bool query_with_file = total_file_num > 0;
 
-    char *res_gemini_req = gemini_request(
-        gemini_api_url->valuestring, file_uris, gemini_api_key->valuestring,
-        fullPrompt, exts, total_file_num);
+    res_gemini_req = gemini_request(
+        gemini_api_url->valuestring, query_with_file ? file_uris : NULL,
+        gemini_api_key->valuestring, fullPrompt, query_with_file ? exts : NULL,
+        total_file_num);
 
-    // printf("Upload URL: %s\n", res_upload_url);
-    // printf("File URI: %s\n", res_file_uri);
-    // printf("gemini_file_url: %s\n", gemini_file_url->valuestring);
     printf("\033[97mGemini response:\n%s\n", res_gemini_req);
 
-    free(env_json);
-    cJSON_Delete(env);
-    free(mem.response);
     curl_global_cleanup();
   }
-  // NFD_PathSet_Free(&pathSet);
+
+  NFD_PathSet_Free(&pathSet);
+  free(env_json);
+  cJSON_Delete(env);
 
   return EXIT_SUCCESS;
 }
