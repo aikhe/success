@@ -34,8 +34,11 @@ curl "${upload_url}" \
   -H "X-Goog-Upload-Command: upload, finalize" \
   --data-binary "@${IMAGE_PATH}" 2> /dev/null > file_info.json
 
+o=`cat file_info.json`
+echo file_info="$o"
 file_uri=$(jq -r ".file.uri" file_info.json)
 echo file_uri=$file_uri
+echo MIME_TYPE=$MIME_TYPE
 
 # Now generate content using that file
 curl "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent" \

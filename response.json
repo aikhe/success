@@ -1,0 +1,34 @@
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "Here are a few caption options for the image, ranging from descriptive to more evocative:\n\n**General & Descriptive:**\n\n*   A young woman with striking blue eyes and a messy bun, dressed in a cozy white knit sweater, gazes thoughtfully out a sunlit window.\n*   Pensive character by a window, bathed in warm light, with a scenic view of lush greenery and the distant ocean.\n*   A 3D animated character in a comfortable sweater, lost in thought while looking out at a bright, open landscape.\n\n**Evocative & Mood-Focused:**\n\n*   Lost in a moment of tranquil contemplation, bathed in the soft morning light.\n*   Cozy vibes and a thoughtful gaze, enjoying the serene view from a sun-drenched window.\n*   Where the gentle light meets a quiet mind: a peaceful moment of reflection.\n*   Daydreaming by the sea, wrapped in the warmth of home and sunlight.\n\n**Short & Sweet:**\n\n*   Cozy contemplation.\n*   Window view thoughts.\n*   Peaceful morning.\n*   Sunny day dreaming.\n*   Quiet reflection."
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 262,
+    "candidatesTokenCount": 237,
+    "totalTokenCount": 1556,
+    "promptTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 4
+      },
+      {
+        "modality": "IMAGE",
+        "tokenCount": 258
+      }
+    ],
+    "thoughtsTokenCount": 1057
+  },
+  "modelVersion": "gemini-2.5-flash",
+  "responseId": "8C72aPWqHcaXosUP9-6qsQ0"
+}

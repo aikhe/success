@@ -1,0 +1,21 @@
+HTTP/2 200 
+content-type: text/plain; charset=utf-8
+x-guploader-uploadid: AAwnv3LbcHNCpUSVlZ4rBApMKPbs3d12OcgiElx5Nrc8-inf_eiFrqTtmSgoSBI9HNDuCtqYj5o56Ehrw2XkTVQky27lJwgYpk7QVMmbkVsRVDU
+x-goog-upload-status: active
+x-goog-upload-url: https://generativelanguage.googleapis.com/upload/v1beta/files?upload_id=AAwnv3LbcHNCpUSVlZ4rBApMKPbs3d12OcgiElx5Nrc8-inf_eiFrqTtmSgoSBI9HNDuCtqYj5o56Ehrw2XkTVQky27lJwgYpk7QVMmbkVsRVDU&upload_protocol=resumable
+x-goog-upload-control-url: https://generativelanguage.googleapis.com/upload/v1beta/files?upload_id=AAwnv3LbcHNCpUSVlZ4rBApMKPbs3d12OcgiElx5Nrc8-inf_eiFrqTtmSgoSBI9HNDuCtqYj5o56Ehrw2XkTVQky27lJwgYpk7QVMmbkVsRVDU&upload_protocol=resumable
+x-goog-upload-chunk-granularity: 8388608
+x-goog-upload-header-x-google-esf-cloud-client-params: backend_service_name: "generativelanguage.googleapis.com" backend_fully_qualified_method: "google.ai.generativelanguage.v1beta.FileService.CreateFile"
+x-goog-upload-header-x-google-session-info: GgQYECgLIAE6IxIhZ2VuZXJhdGl2ZWxhbmd1YWdlLmdvb2dsZWFwaXMuY29t
+x-goog-upload-header-x-google-backends: unix:/tmp/esfbackend.1760954619.571512.128708
+x-goog-upload-header-content-type: application/json; charset=UTF-8
+x-goog-upload-header-x-google-security-signals: FRAMEWORK=ONE_PLATFORM,ENV=borg,ENV_DEBUG=borg_user:genai-api;borg_job:prod.genai-api
+x-goog-upload-header-vary: Origin
+x-goog-upload-header-vary: X-Origin
+x-goog-upload-header-vary: Referer
+x-goog-upload-header-x-google-gfe-backend-request-cost: 11.2163
+content-length: 0
+date: Mon, 20 Oct 2025 12:45:16 GMT
+server: UploadServer
+alt-svc: h3=":443"; ma=2592000,h3-29=":443"; ma=2592000
+

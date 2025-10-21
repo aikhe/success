@@ -29,3 +29,76 @@ echo
 cat response.json
 echo
 jq -r ".candidates[].content.parts[].text" response.json | sed 's/\\033/\x1b/g'
+
+Gemini responsesss:
+{
+  "candidates": [
+    {
+      "content": {
+        "parts": [
+          {
+            "text": "\\033[97m\nAbsolutely! She definitely has a very charming and cute appearance.\n\n\\033[96mHer bright blue eyes,
+ soft hairstyle with bangs, and the gentle expression on her face really contribute to a sweet and adorable look.\\033[97m"
+          }
+        ],
+        "role": "model"
+      },
+      "finishReason": "STOP",
+      "index": 0
+    }
+  ],
+  "usageMetadata": {
+    "promptTokenCount": 326,
+    "candidatesTokenCount": 63,
+    "totalTokenCount": 543,
+    "cachedContentTokenCount": 173,
+    "promptTokensDetails": [
+      {
+        "modality": "TEXT",
+        "tokenCount": 68
+      },
+      {
+        "modality": "IMAGE",
+        "tokenCount": 258
+      }
+    ],
+    "cacheTokensDetails": [
+      {
+        "modality": "IMAGE",
+        "tokenCount": 137
+      },
+      {
+        "modality": "TEXT",
+        "tokenCount": 36
+      }
+    ],
+    "thoughtsTokenCount": 154
+  },
+  "modelVersion": "gemini-2.5-flash",
+  "responseId": "VkH2aIbVB7_l1e8P4rrl0A4"
+}
+
+#        ██████████         ██  ██████████████                
+#       ██████████             ██████████████       ██████
+#          ███████████████   ███   ███████████████
+#            ███    ████████████████ ███    ███   
+#        ███████████████   ███   ███████████      
+#   ██████████ ███     ███████   ████ ███    ███       
+#  █████████████████████████ ██████████████████        
+#  
+#     ▄████████ ███    █▄   ▄████████  ▄████████    ▄████████    ▄████████    ▄████████ 
+#    ███    ███ ███    ███ ███    ███ ███    ███   ███    ███   ███    ███   ███    ███ 
+#    ███    █▀  ███    ███ ███    █▀  ███    █▀    ███    █▀    ███    █▀    ███    █▀  
+#    ███        ███    ███ ███        ███         ▄███▄▄▄       ███          ███        
+#  ▀███████████ ███    ███ ███        ███        ▀▀███▀▀▀     ▀███████████ ▀███████████ 
+#           ███ ███    ███ ███    █▄  ███    █▄    ███    █▄           ███          ███ 
+#     ▄█    ███ ███    ███ ███    ███ ███    ███   ███    ███    ▄█    ███    ▄█    ███ 
+#   ▄████████▀  ████████▀  ████████▀  ████████▀    ██████████  ▄████████▀   ▄████████▀  
+#                                                                                       
+#        ::::::::  :::    :::  ::::::::   ::::::::  :::::::::: ::::::::   :::::::: 
+#      :+:    :+: :+:    :+: :+:    :+: :+:    :+: :+:       :+:    :+: :+:    :+: 
+#     +:+        +:+    +:+ +:+        +:+        +:+       +:+        +:+         
+#    +#++:++#++ +#+    +:+ +#+        +#+        +#++:++#  +#++:++#++ +#++:++#++   
+#          +#+ +#+    +#+ +#+        +#+        +#+              +#+        +#+    
+#  #+#    #+# #+#    #+# #+#    #+# #+#    #+# #+#       #+#    #+# #+#    #+#     
+#  ########   ########   ########   ########  ########## ########   ########       
