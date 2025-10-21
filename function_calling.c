@@ -411,7 +411,7 @@ char *gemini_request(char *gemini_url, char **file_uris, char *gemini_api_key,
   cJSON_AddItemToArray(parts, part_text);
 
   char *req_body_json_str = cJSON_Print(req_body_json);
-  // printf("req_body:\n%s\n", req_body_json_str);
+  printf("req_body:\n%s\n", req_body_json_str);
 
   CURL *curl;
 
@@ -422,6 +422,8 @@ char *gemini_request(char *gemini_url, char **file_uris, char *gemini_api_key,
     char api_key[512];
     char *header_name = "x-goog-api-key:";
     char *content_type = "Content-Type: application/json";
+
+    printf("curl start:\n");
 
     snprintf(api_key, sizeof(api_key), "%s %s", header_name, gemini_api_key);
 
@@ -444,6 +446,10 @@ char *gemini_request(char *gemini_url, char **file_uris, char *gemini_api_key,
 
     curl_easy_perform(curl);
 
+    printf("%s\n", mem.response);
+
+    printf("curl end: \n");
+
     cJSON *mem_res = cJSON_Parse(mem.response);
     cJSON *candidates = cJSON_GetObjectItemCaseSensitive(mem_res, "candidates");
     cJSON *first_candidate = cJSON_GetArrayItem(candidates, 0);
@@ -463,6 +469,8 @@ char *gemini_request(char *gemini_url, char **file_uris, char *gemini_api_key,
     cJSON_Delete(req_body_json);
     curl_slist_free_all(list);
     curl_easy_cleanup(curl);
+
+    printf("im here end\n");
 
     return gemini_response;
   }
@@ -553,7 +561,8 @@ int main(void) {
         "response and viewing it via terminal and no markdown formatting "
         "will "
         "work, also format it with colors with ANSI format like this "
-        "\\033[97m";
+        "\\033[97m ascii utlize the background and foreground colors, bolds, "
+        "italics, etc.";
     char fullPrompt[512];
     snprintf(fullPrompt, 512, "System Prompt: %s\nUser Prompt: %s",
              systemPrompt, userPrompt);
@@ -598,14 +607,14 @@ int main(void) {
     // printf("Upload URL: %s\n", res_upload_url);
     // printf("File URI: %s\n", res_file_uri);
     // printf("gemini_file_url: %s\n", gemini_file_url->valuestring);
-    printf("\033[97mGemini response:\n%s\033[0m\n", res_gemini_req);
+    printf("\033[97mGemini response:\n%s\n", res_gemini_req);
 
     free(env_json);
     cJSON_Delete(env);
     free(mem.response);
     curl_global_cleanup();
   }
-  NFD_PathSet_Free(&pathSet);
+  // NFD_PathSet_Free(&pathSet);
 
   return EXIT_SUCCESS;
 }
