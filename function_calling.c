@@ -188,7 +188,7 @@ void *geminiLoading(void *arg) {
     printf(".");
     delay(500);
   }
-  printf("\x1b[0m");
+  printf("✔\033[0m");
 
   return NULL;
 }
@@ -412,6 +412,8 @@ char *gemini_request(char *gemini_url, char **file_uris, char *gemini_api_key,
 
     curl_easy_perform(curl);
 
+    // printf("%s\n", mem.response);
+
     cJSON *mem_res = cJSON_Parse(mem.response);
     cJSON *candidates = cJSON_GetObjectItemCaseSensitive(mem_res, "candidates");
     cJSON *first_candidate = cJSON_GetArrayItem(candidates, 0);
@@ -446,6 +448,8 @@ char *gemini_request(char *gemini_url, char **file_uris, char *gemini_api_key,
 }
 
 int main(void) {
+  printf("\033[93m");
+
   puts(R"(
         ::::::::  :::    :::  ::::::::   ::::::::  :::::::::: ::::::::   :::::::: 
       :+:    :+: :+:    :+: :+:    :+: :+:    :+: :+:       :+:    :+: :+:    :+: 
@@ -455,6 +459,8 @@ int main(void) {
   #+#    #+# #+#    #+# #+#    #+# #+#    #+# #+#       #+#    #+# #+#    #+#     
   ########   ########   ########   ########  ########## ########   ########       
   )");
+
+  printf("\033[0m");
 
   setvbuf(stdout, NULL, _IONBF, 0);
 
@@ -493,15 +499,56 @@ int main(void) {
   }
 
   char *systemPrompt =
-      "This is running on a terminal so format it to look good, no "
-      "markdown formatting like bolds with double asterisk cause im getting "
-      "the "
-      "response and viewing it via terminal and no markdown formatting "
-      "will work, also format it with colors with ANSI format like this "
-      "\\033[97m ascii utlize the background and foreground colors, bolds, "
-      "italics, etc.";
-  char userPrompt[256];
-  char fullPrompt[512];
+      "CRITICAL RESPONSE RULES: "
+      "- Answer ONLY what is asked - nothing more, nothing less "
+      "- NO greetings, NO asking questions back, NO offering help "
+      "- When asked 'what is SUCCESS', describe the platform directly "
+      "- When asked 'who are you', say you are SUCCESS AI "
+      "- For any other question, answer it directly without introduction "
+      "- Never say 'I understand', 'Hello', or 'How can I help' "
+      "- Be concise, informative, and get straight to the point "
+
+      "SUCCESS is a collaboration platform designed for UCCians to connect, "
+      "learn, "
+      "and grow together. It features built-in tools such as quizzes, "
+      "flashcards, "
+      "summarizers, streak tracking, and leaderboards to make learning "
+      "engaging, "
+      "productive, and exam-ready. Most importantly, this platform integrates "
+      "proven "
+      "study methods (e.g., Pomodoro, active recall, spaced repetition, etc.), "
+      "personalized to fit each student's learning style, making study "
+      "sessions "
+      "more effective and easier to manage. "
+      "To have a lively feel to this platform, both students and teachers can "
+      "collaborate, share resources, and ask or answer questions. This system "
+      "also "
+      "allows students to track their academic progress, mark completed "
+      "subjects, "
+      "and prepare for upcoming lessons. By storing data locally, the program "
+      "ensures that resources remain accessible offline, making it useful for "
+      "students who don't always have access to the internet. "
+
+      "TERMINAL FORMATTING:"
+      "- This is running on a terminal, so make it visually clean and readable."
+      "- Do NOT use markdown formatting (like **bold** or ```code``` blocks)."
+      "- Use ANSI escape codes for styling and color to make it colorful "
+      "(e.g., \\033[97m for "
+      "white text, other colors like orange, green, blue, red, etc.)."
+      "- Utilize foreground colors for contrast."
+      "- Use \\033[1m for bold and \\033[3m for italics when needed."
+      "- Keep alignment consistent with clear indentation and spacing."
+      "- Use simple ASCII characters or line symbols for structure like (e.g., "
+      "─, "
+      "│, •)."
+      "- Output should look like a well-formatted CLI report — no markdown "
+      "- Don't use line seperators"
+      "syntax."
+
+      "CRITICAL RESPONSE RULES: "
+      "- Don't reply with \"Okay, I understand.\"";
+  char userPrompt[512];
+  char fullPrompt[4000];
 
   nfdresult_t nfd_res = NFD_CANCEL;
   nfdpathset_t pathSet = {0};
@@ -512,7 +559,11 @@ int main(void) {
     char **file_uris = NULL;
     char *res_gemini_req = NULL;
 
-    printf("Enter your prompt [1 to attach files, enter 0 to exit]: ");
+    printf("Success Chatbot v0.8\n\033[97mEnter your prompt \033[34m[1 to "
+           "attach files, enter 0 to "
+           "exit]: "
+           "\033[0m");
+
     if (fgets(userPrompt, sizeof(userPrompt), stdin) != NULL) {
       userPrompt[strcspn(userPrompt, "\n")] = '\0';
 
@@ -530,17 +581,19 @@ int main(void) {
         continue;
       }
     }
-    snprintf(fullPrompt, 512, "System Prompt: %s\nUser Prompt: %s",
-             systemPrompt, userPrompt);
+    snprintf(fullPrompt, sizeof(fullPrompt),
+             "System Prompt: %s\nUser Prompt: %s", systemPrompt, userPrompt);
+
+    // printf("Full prompt:%s\n", fullPrompt);
 
     pthread_t generate_thread = {0};
 
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
-    if (nfd_res == NFD_OKAY) {
-      is_generating = true;
-      pthread_create(&generate_thread, NULL, geminiLoading, NULL);
+    is_generating = true;
+    pthread_create(&generate_thread, NULL, geminiLoading, NULL);
 
+    if (nfd_res == NFD_OKAY) {
       total_file_num = NFD_PathSet_GetCount(&pathSet);
 
       int capacity = 0;
@@ -572,16 +625,12 @@ int main(void) {
         free(res_upload_url);
       }
 
-      is_generating = false;
-      pthread_cancel(generate_thread);
-      pthread_join(generate_thread, NULL);
-
-      for (size_t j = 0; j < total_file_num; j++) {
-        printf("ext %zu: %s\n", j + 1, exts[j]);
-        printf("file_uri %zu: %s\n", j + 1, file_uris[j]);
-      }
+      // for (size_t j = 0; j < total_file_num; j++) {
+      //   printf("ext %zu: %s\n", j + 1, exts[j]);
+      //   printf("file_uri %zu: %s\n", j + 1, file_uris[j]);
+      // }
     } else if (nfd_res == NFD_CANCEL) {
-      puts("User pressed cancel.");
+      // puts("User pressed cancel.");
     } else {
       printf("Error: %s\n", NFD_GetError());
     }
@@ -593,7 +642,11 @@ int main(void) {
         gemini_api_key->valuestring, fullPrompt, query_with_file ? exts : NULL,
         total_file_num);
 
-    printf("\033[97mGemini response:\n%s\n", res_gemini_req);
+    is_generating = false;
+    pthread_cancel(generate_thread);
+    pthread_join(generate_thread, NULL);
+
+    printf("✔\n\033[97mGemini response:\n%s\n", res_gemini_req);
 
     if (query_with_file) {
       for (size_t i = 0; i < total_file_num; i++) {
