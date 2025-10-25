@@ -60,8 +60,7 @@ int max_line_width(const char *text) {
   return max_width;
 }
 
-WINDOW *draw_centered_win(WINDOW *win, const char *text, int y, int text_pos_x,
-                          int with_border) {
+WINDOW *draw_centered(WINDOW *win, const char *text, int y, int text_pos_x) {
   // int h, w;
   // getmaxyx(win, h, w);
 
@@ -76,24 +75,22 @@ WINDOW *draw_centered_win(WINDOW *win, const char *text, int y, int text_pos_x,
   int max_width = max_line_width(text);
 
   // No borders, so dimensions are just content size
-  int box_w = max_width;
+  int box_w = max_width - 2;
   int box_h = num_lines;
   // int start_y = (h - box_h) / 2;
   int start_x = (w - box_w) / 2;
 
   WINDOW *boxwin = newwin(box_h, box_w, y, start_x);
 
-  if (with_border) {
-    cchar_t vline, hline, ul, ur, ll, lr;
-    setcchar(&vline, L"┃", 0, 0, NULL);
-    setcchar(&hline, L"━", 0, 0, NULL);
-    setcchar(&ul, L"┏", 0, 0, NULL);
-    setcchar(&ur, L"┓", 0, 0, NULL);
-    setcchar(&ll, L"┗", 0, 0, NULL);
-    setcchar(&lr, L"┛", 0, 0, NULL);
+  cchar_t vline, hline, ul, ur, ll, lr;
+  setcchar(&vline, L"┃", 0, 0, NULL);
+  setcchar(&hline, L"━", 0, 0, NULL);
+  setcchar(&ul, L"┏", 0, 0, NULL);
+  setcchar(&ur, L"┓", 0, 0, NULL);
+  setcchar(&ll, L"┗", 0, 0, NULL);
+  setcchar(&lr, L"┛", 0, 0, NULL);
 
-    wborder_set(boxwin, &vline, &vline, &hline, &hline, &ul, &ur, &ll, &lr);
-  }
+  wborder_set(boxwin, &vline, &vline, &hline, &hline, &ul, &ur, &ll, &lr);
 
   // Print multi-line text line by line
   int line_num = 0;
@@ -107,17 +104,24 @@ WINDOW *draw_centered_win(WINDOW *win, const char *text, int y, int text_pos_x,
       strncpy(line_buf, line_start, line_len);
       line_buf[line_len] = '\0';
 
+      // Trim leading whitespace
+      char *trimmed = line_buf;
+      while (*trimmed == ' ' || *trimmed == '\t')
+        trimmed++;
+
       // Trim trailing whitespace
-      int trimmed_len = strlen(line_buf);
-      while (trimmed_len > 0 && (line_buf[trimmed_len - 1] == ' ' ||
-                                 line_buf[trimmed_len - 1] == '\t' ||
-                                 line_buf[trimmed_len - 1] == '\r')) {
+      int trimmed_len = strlen(trimmed);
+      while (trimmed_len > 0 && (trimmed[trimmed_len - 1] == ' ' ||
+                                 trimmed[trimmed_len - 1] == '\t' ||
+                                 trimmed[trimmed_len - 1] == '\r')) {
         trimmed_len--;
       }
-      line_buf[trimmed_len] = '\0';
+      trimmed[trimmed_len] = '\0';
 
       if (trimmed_len > 0) {
-        mvwaddstr(boxwin, line_num, text_pos_x, line_buf);
+        wattron(boxwin, COLOR_PAIR(1));
+        mvwaddstr(boxwin, line_num, text_pos_x, trimmed);
+        wattroff(boxwin, COLOR_PAIR(1));
       }
 
       line_num++;
@@ -129,14 +133,12 @@ WINDOW *draw_centered_win(WINDOW *win, const char *text, int y, int text_pos_x,
   return boxwin;
 }
 
-void draw_sub_win(WINDOW *win, const char *text, int text_pos_y,
-                  int text_pos_x) {
-  // int w = getmaxx(win);
+void draw_sub_win(WINDOW *win, const char *text, int y, int text_pos_x) {
 
   int num_lines = count_lines(text);
 
   // No borders, so dimensions are just content size
-  int box_h = num_lines + 1;
+  int box_h = num_lines;
 
   // Print multi-line text line by line
   int line_num = 0;
@@ -150,22 +152,23 @@ void draw_sub_win(WINDOW *win, const char *text, int text_pos_y,
       strncpy(line_buf, line_start, line_len);
       line_buf[line_len] = '\0';
 
+      // Trim leading whitespace
+      char *trimmed = line_buf;
+      while (*trimmed == ' ' || *trimmed == '\t')
+        trimmed++;
+
       // Trim trailing whitespace
-      int trimmed_len = strlen(line_buf);
-      while (trimmed_len > 0 && (line_buf[trimmed_len - 1] == ' ' ||
-                                 line_buf[trimmed_len - 1] == '\t' ||
-                                 line_buf[trimmed_len - 1] == '\r')) {
+      int trimmed_len = strlen(trimmed);
+      while (trimmed_len > 0 && (trimmed[trimmed_len - 1] == ' ' ||
+                                 trimmed[trimmed_len - 1] == '\t' ||
+                                 trimmed[trimmed_len - 1] == '\r')) {
         trimmed_len--;
       }
-      line_buf[trimmed_len] = '\0';
+      trimmed[trimmed_len] = '\0';
 
       if (trimmed_len > 0) {
         wattron(win, COLOR_PAIR(1));
-        int lead = 0;
-        while (line_buf[lead] == ' ' || line_buf[lead] == '\t') {
-          lead++;
-        }
-        mvwaddstr(win, line_num - 1, text_pos_x + lead, line_buf + lead);
+        mvwaddstr(win, line_num, text_pos_x, trimmed);
         wattroff(win, COLOR_PAIR(1));
       }
 
@@ -192,56 +195,33 @@ void introduction_page(void) {
   ▀▀▀█ █░░█ █░░░ █░░░ █▀▀▀ ▀▀▀█ ▀▀▀█
   ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀
                              v0.1.10
+
+  hello this is me!
   )";
 
-  const char *ucc = R"(
-       █  █ █▀▀▀ █▀▀▀
-       █░░█ █░░░ █░░░
-       ▀▀▀▀ ▀▀▀▀ ▀▀▀▀
+  const char *s = R"(
+  █▀▀▀
+  ▀▀▀█
+  ▀▀▀▀
   )";
 
-  const char *intro = R"(
-    SUCCESS is a learning platform for UCCians designed to make
-   studying engaging and effective. It offers tools like quizzes,
-   flashcards, streaks, and leaderboards—plus personalized study
-   methods like Pomodoro and active recall—to help students learn
-                     smarter and achieve more.
+  const char *new_text = R"(
+  Lorem Ipsum is simply dummy text of the printing and typesetting industry.
+  Lorem Ipsum has been the industry's standard dummy text ever since the
+  1500s.
   )";
 
-  const char *success = R"(
-    SUCCESS
-  )";
-
-  const char *auth = R"(
-  [l] login          To start using success ✦
-  [s] signup                Make an account ✔
-  [x] exit                    Stop and quit ⟡
-  )";
-
-  const char *auth_coms = R"(
-  [l] login 
-  [s] signup
-  [x] exit  
-  )";
-
-  WINDOW *boxwin = draw_centered_win(stdscr, ascii_art, 1, 0, 0);
-  draw_sub_win(boxwin, ucc, 0, 0);
-  WINDOW *intro_win = draw_centered_win(stdscr, intro, 6, 0, 0);
-  draw_sub_win(intro_win, success, 0, 0);
-  WINDOW *authwin = draw_centered_win(stdscr, auth, 13, 0, 1);
-  draw_sub_win(authwin, auth_coms, 0, 0);
+  WINDOW *boxwin = draw_centered(stdscr, ascii_art, 1, 0);
+  draw_sub_win(boxwin, s, 1, 5);
+  draw_centered(stdscr, new_text, 8, 0);
 
   int ch;
   while ((ch = getch()) != 'q') {
     if (ch == KEY_RESIZE) {
       resize_term(0, 0);
       clear();
-      WINDOW *boxwin = draw_centered_win(stdscr, ascii_art, 1, 0, 0);
-      draw_sub_win(boxwin, ucc, 0, 0);
-      WINDOW *intro_win = draw_centered_win(stdscr, intro, 6, 0, 0);
-      draw_sub_win(intro_win, success, 0, 0);
-      WINDOW *authwin = draw_centered_win(stdscr, auth, 13, 0, 1);
-      draw_sub_win(authwin, auth_coms, 0, 0);
+      draw_centered(stdscr, ascii_art, 1, 0);
+      // draw_centered(stdscr, new_text, 8, 0);
     }
   }
 
