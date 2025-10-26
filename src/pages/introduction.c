@@ -8,7 +8,7 @@ int count_lines(const char *text) {
   while (*text == '\n')
     text++;
 
-  int lines = 2;
+  int lines = 0;
   for (int i = 0; text[i] != '\0'; i++) {
     if (text[i] == '\n')
       lines++;
@@ -59,11 +59,12 @@ int max_line_width(const char *text) {
   return max_width;
 }
 
-void draw_centered(WINDOW *win, const char *text) {
-  int h, w;
-  getmaxyx(win, h, w);
+void draw_centered(WINDOW *win, const char *text, int y) {
+  // int h, w;
+  // getmaxyx(win, h, w);
 
-  werase(win);
+  int w = getmaxx(win);
+
   wrefresh(win);
 
   while (*text == '\n')
@@ -71,50 +72,62 @@ void draw_centered(WINDOW *win, const char *text) {
 
   int num_lines = count_lines(text);
   int max_width = max_line_width(text);
-  int box_w = max_width + 4; // 2 spaces + 2 borders
-  int box_h = num_lines + 2; // content + top/bottom borders
-  int start_y = (h - box_h) / 2;
+
+  // No borders, so dimensions are just content size
+  int box_w = max_width - 2;
+  int box_h = num_lines;
+  // int start_y = (h - box_h) / 2;
   int start_x = (w - box_w) / 2;
 
-  WINDOW *boxwin = newwin(box_h, box_w, start_y, start_x);
-  cchar_t vline, hline, ul, ur, ll, lr;
-  setcchar(&vline, L"┃", 0, 0, NULL);
-  setcchar(&hline, L"━", 0, 0, NULL);
-  setcchar(&ul, L"┏", 0, 0, NULL);
-  setcchar(&ur, L"┓", 0, 0, NULL);
-  setcchar(&ll, L"┗", 0, 0, NULL);
-  setcchar(&lr, L"┛", 0, 0, NULL);
-  wborder_set(boxwin, &vline, &vline, &hline, &hline, &ul, &ur, &ll, &lr);
+  WINDOW *boxwin = newwin(box_h, box_w, y, start_x);
+
+  // cchar_t vline, hline, ul, ur, ll, lr;
+  // setcchar(&vline, L"┃", 0, 0, NULL);
+  // setcchar(&hline, L"━", 0, 0, NULL);
+  // setcchar(&ul, L"┏", 0, 0, NULL);
+  // setcchar(&ur, L"┓", 0, 0, NULL);
+  // setcchar(&ll, L"┗", 0, 0, NULL);
+  // setcchar(&lr, L"┛", 0, 0, NULL);
+  //
+  // wborder_set(boxwin, &vline, &vline, &hline, &hline, &ul, &ur, &ll, &lr);
 
   // Print multi-line text line by line
-  int line_num = 2;
+  int line_num = 0;
   const char *line_start = text;
 
-  for (int i = 0; text[i] != '\0' && line_num < box_h - 1; i++) {
+  for (int i = 0; text[i] != '\0' && line_num < box_h; i++) {
     if (text[i] == '\n') {
-      // Extract the current line
+      // Extract and print the current line
       int line_len = &text[i] - line_start;
       char line_buf[256];
       strncpy(line_buf, line_start, line_len);
       line_buf[line_len] = '\0';
 
-      // Only trim trailing whitespace, preserve leading spaces
-      int trimmed_len = strlen(line_buf);
-      while (trimmed_len > 0 && (line_buf[trimmed_len - 1] == ' ' ||
-                                 line_buf[trimmed_len - 1] == '\t' ||
-                                 line_buf[trimmed_len - 1] == '\r')) {
+      // Trim leading whitespace
+      char *trimmed = line_buf;
+      while (*trimmed == ' ' || *trimmed == '\t')
+        trimmed++;
+
+      // Trim trailing whitespace
+      int trimmed_len = strlen(trimmed);
+      while (trimmed_len > 0 && (trimmed[trimmed_len - 1] == ' ' ||
+                                 trimmed[trimmed_len - 1] == '\t' ||
+                                 trimmed[trimmed_len - 1] == '\r')) {
         trimmed_len--;
       }
-      line_buf[trimmed_len] = '\0';
+      trimmed[trimmed_len] = '\0';
 
       if (trimmed_len > 0) {
-        mvwaddstr(boxwin, line_num, 1,
-                  line_buf); // Use line_buf directly, not trimmed
+        wattron(boxwin, COLOR_PAIR(1));
+        mvwaddstr(boxwin, line_num, 0, trimmed);
+        wattroff(boxwin, COLOR_PAIR(1));
       }
+
       line_num++;
       line_start = &text[i + 1];
     }
   }
+
   wrefresh(boxwin);
 }
 
@@ -125,6 +138,9 @@ void introduction_page(void) {
   keypad(stdscr, TRUE);
   curs_set(0);
 
+  start_color();
+  init_pair(1, COLOR_CYAN, COLOR_BLACK);
+
   const char *ascii_art = R"(
   █▀▀▀ █  █ █▀▀▀ █▀▀▀ █▀▀█ █▀▀▀ █▀▀▀
   ▀▀▀█ █░░█ █░░░ █░░░ █▀▀▀ ▀▀▀█ ▀▀▀█
@@ -134,21 +150,28 @@ void introduction_page(void) {
   hello this is me!
   )";
 
-  // const char *new_text = R"(
-  // Lorem Ipsum is simply dummy text of the printing and typesetting industry.
-  // Lorem Ipsum has been the industry's standard dummy text ever since the
-  // 1500s,
+  // const char *s = R"(
+  // █▀▀▀
+  // ▀▀▀█
+  // ▀▀▀▀
   // )";
 
-  draw_centered(stdscr, ascii_art);
-  // draw_centered(right_win, new_text);
+  const char *new_text = R"(
+  Lorem Ipsum is simply dummy text of the printing and typesetting industry.
+  Lorem Ipsum has been the industry's standard dummy text ever since the
+  1500s.
+  )";
+
+  draw_centered(stdscr, ascii_art, 1);
+  draw_centered(stdscr, new_text, 8);
 
   int ch;
   while ((ch = getch()) != 'q') {
     if (ch == KEY_RESIZE) {
       resize_term(0, 0);
       clear();
-      draw_centered(stdscr, ascii_art);
+      draw_centered(stdscr, ascii_art, 1);
+      draw_centered(stdscr, new_text, 12);
     }
   }
 
