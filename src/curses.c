@@ -22,7 +22,15 @@ void enableVirtualTerminal() {
 }
 
 int main(void) {
-  setlocale(LC_ALL, "");
+  // Set locale BEFORE calling any curses functions
+  setlocale(LC_ALL, "en_US.UTF-8");
+
+// On Windows, try UTF-8 locale if the above fails
+#ifdef _WIN32
+  if (!setlocale(LC_ALL, "en_US.UTF-8")) {
+    setlocale(LC_ALL, "C.UTF-8");
+  }
+#endif
 
   enableVirtualTerminal();
 
