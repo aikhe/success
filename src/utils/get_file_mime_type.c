@@ -1,6 +1,3 @@
-#include <stdio.h>
-#include <string.h>
-
 #include "get_file_mime_type.h"
 
 const char *get_file_mime_type(const char *filename) {

@@ -8,30 +8,25 @@
 #include <curl/curl.h>
 #include <nfd.h>
 #include <pthread.h>
-#include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
 
+#include "callbacks/write_callback.h"
+#include "utils/gemini_loading.h"
 #include "utils/get_file_mime_type.h"
+#include "utils/read_file.h"
+#include "utils/read_file_b64.h"
+#include "utils/replace_escaped_ansii.h"
+
+#include "types/types.h"
 
 #include <windows.h>
 #undef MOUSE_MOVED // remove redefinition errors from wincon.h macro
 #include <curses.h>
 
-// remove compilation errors when testing memory leaks
-// with valgrind on unix based systems
-#ifdef __linux__
-#include <unistd.h>
-#endif
-
 #define QUOTE(...) #__VA_ARGS__ // pre-processor to turn content into string
-
-typedef struct Memory {
-  char *response;
-  size_t size;
-} Memory;
 
 #ifdef _WIN32
 // enable ANSI support for windows cmd
@@ -43,111 +38,6 @@ void enableVirtualTerminal() {
   SetConsoleMode(hOut, dwMode);
 }
 #endif
-
-void delay(int millisecond) {
-#ifdef _WIN32
-  Sleep(millisecond);
-#elif __linux__
-  usleep(millisecond * 1000);
-#endif
-}
-
-char *read_file(const char *filename) {
-  FILE *fptr = fopen(filename, "rb");
-  if (!fptr)
-    return NULL;
-
-  fseek(fptr, 0, SEEK_END);
-  long length = ftell(fptr);
-  rewind(fptr);
-
-  char *data = malloc(length + 1);
-  fread(data, 1, length, fptr);
-  data[length] = '\0';
-  fclose(fptr);
-
-  return data;
-}
-
-char *replace_escaped_ansi(char *input) {
-  const char *pattern = "\\033";
-  const char esc = '\x1b';
-  size_t len = strlen(input);
-  char *output = malloc(len + 1);
-  if (!output)
-    return NULL;
-
-  size_t i = 0, j = 0;
-  while (i < len) {
-    if (strncmp(&input[i], pattern, 4) == 0) {
-      output[j++] = esc;
-      i += 4;
-    } else {
-      output[j++] = input[i++];
-    }
-  }
-  output[j] = '\0';
-  return output;
-}
-
-unsigned char *read_file_b64(const char *filename, size_t *out_len) {
-  FILE *fptr = fopen(filename, "rb");
-  if (!fptr)
-    return NULL;
-
-  fseek(fptr, 0, SEEK_END);
-  long length = ftell(fptr);
-  rewind(fptr);
-
-  unsigned char *data = malloc(length);
-  size_t read_len = fread(data, 1, length, fptr);
-  fclose(fptr);
-
-  *out_len = read_len;
-  return data;
-}
-
-static size_t write_callback(char *ptr, size_t size, size_t nmemb,
-                             void *userdata) {
-  size_t total_bytes = size * nmemb;
-  struct Memory *mem = (struct Memory *)userdata;
-
-  char *temp = realloc(mem->response, mem->size + total_bytes + 1);
-  if (!temp) {
-    fprintf(stderr, "[ERROR] Failed to realloc memory. \n");
-    return 0;
-  }
-
-  mem->response = temp;
-  memcpy(&(mem->response[mem->size]), ptr, total_bytes);
-  mem->size += total_bytes;
-  mem->response[mem->size] = '\0';
-
-  return total_bytes;
-}
-
-bool is_generating = false;
-
-void *geminiLoading(void *arg) {
-  printf("\033[92mThinking");
-
-  while (is_generating) {
-    printf(".");
-    delay(500);
-  }
-  printf("\033[0m");
-
-  return NULL;
-}
-
-typedef struct CallType {
-  char *call_type;
-} CallType;
-
-CallType set_call_type(char *call_type) {
-  CallType ct = {.call_type = call_type};
-  return ct;
-}
 
 char *grep_string(const char *data) {
   if (*data == '\0')
@@ -581,7 +471,7 @@ int main(void) {
     curl_global_init(CURL_GLOBAL_DEFAULT);
 
     is_generating = true;
-    pthread_create(&generate_thread, NULL, geminiLoading, NULL);
+    pthread_create(&generate_thread, NULL, gemini_loading, NULL);
 
     if (nfd_res == NFD_OKAY) {
       total_file_num = NFD_PathSet_GetCount(&pathSet);
