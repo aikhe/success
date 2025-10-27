@@ -11,7 +11,10 @@
 #include <stdbool.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include <time.h>
+
+#include "utils/get_file_mime_type.h"
 
 #include <windows.h>
 #undef MOUSE_MOVED // remove redefinition errors from wincon.h macro
@@ -20,7 +23,6 @@
 // remove compilation errors when testing memory leaks
 // with valgrind on unix based systems
 #ifdef __linux__
-#include <string.h>
 #include <unistd.h>
 #endif
 
@@ -41,25 +43,6 @@ void enableVirtualTerminal() {
   SetConsoleMode(hOut, dwMode);
 }
 #endif
-
-const char *get_file_mime_type(const char *filename) {
-  const char *dot = strrchr(filename, '.');
-  if (!dot || dot == filename)
-    return NULL;
-
-  char *ext = (char *)dot + 1;
-
-  if (strcmp(ext, "png") == 0)
-    return "image/png";
-  else if (strcmp(ext, "jpeg") == 0 || strcmp(ext, "jpg") == 0)
-    return "image/jpeg";
-  else if (strcmp(ext, "pdf") == 0)
-    return "application/pdf";
-  else
-    printf("[Error] Invalid file formats.");
-
-  return NULL;
-}
 
 void delay(int millisecond) {
 #ifdef _WIN32
