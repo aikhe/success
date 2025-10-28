@@ -3,10 +3,10 @@
 ifeq ($(OS),Windows_NT)
 all:
 	chcp 65001
-	gcc -Wall -g -D__USE_MINGW_ANSI_STDIO=1 function_calling.c -I"./include" -L"./lib" -lcurl -lcjson -lpthread ./lib/nfd.lib -lole32 -luuid -lpdcurses -o function_calling.exe
+	gcc -Wall -g -D__USE_MINGW_ANSI_STDIO=1 main.c -I"../include" -L"../lib" -lcurl -lcjson -lpthread ../lib/nfd.lib -lole32 -luuid -lpdcurses -o main.exe
 
 run: all
-	.\function_calling
+	.\main.exe 2>&1
 else
 	# gcc prototype.c -o prototype -pthread -lcurl -lcjson ./lib/libnfd.a $(pkg-config --cflags --libs gtk+-3.0) ./base64.c
 all:
