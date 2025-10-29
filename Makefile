@@ -2,6 +2,7 @@
 
 ifeq ($(OS),Windows_NT)
 all:
+	chcp 65001
 	gcc -Wall -g -D__USE_MINGW_ANSI_STDIO=1 function_calling.c -I"./include" -L"./lib" -lcurl -lcjson -lpthread ./lib/nfd.lib -lole32 -luuid -o function_calling.exe
 
 run: all

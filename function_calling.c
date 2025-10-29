@@ -188,7 +188,7 @@ void *geminiLoading(void *arg) {
     printf(".");
     delay(500);
   }
-  printf("✔\033[0m");
+  printf("\033[0m");
 
   return NULL;
 }
@@ -282,7 +282,7 @@ char *get_upload_url(long int image_len, char *gemini_file_url,
   curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
   curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1L);
   // verbose logging
-  curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+  // curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 
   curl_easy_setopt(curl, CURLOPT_URL, gemini_file_url);
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
@@ -297,7 +297,7 @@ char *get_upload_url(long int image_len, char *gemini_file_url,
 
   char *res_url = grep_string(mem.response);
 
-  printf("res_url: %s\n", res_url);
+  // printf("res_url: %s\n", res_url);
 
   curl_slist_free_all(list);
   free(mem.response);
@@ -346,29 +346,25 @@ char *get_file_uri(unsigned char *image_data, long int image_len,
 
   curl_easy_setopt(curl, CURLOPT_CAINFO, "cacert-2025-09-09.pem");
 
-  long response_code;
-  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
-  printf("HTTP Response Code: %ld\n", response_code);
-
   curl_easy_perform(curl);
 
-  printf("GET FILE URI:\n%s\n", mem.response);
+  // printf("GET FILE URI:\n%s\n", mem.response);
 
   char *result_uri = NULL;
   cJSON *parsed_json = cJSON_Parse(mem.response);
   cJSON *file = cJSON_GetObjectItemCaseSensitive(parsed_json, "file");
-  char *req_body_json_str = cJSON_Print(file);
-  printf("im here uri: %s\n", req_body_json_str);
+  // char *req_body_json_str = cJSON_Print(file);
+  // printf("im here uri: %s\n", req_body_json_str);
   cJSON *uri = cJSON_GetObjectItemCaseSensitive(file, "uri");
   result_uri = strdup(uri->valuestring);
 
-  printf("im here uri: %s\n", uri->valuestring);
+  // printf("im here uri: %s\n", uri->valuestring);
 
   cJSON_Delete(parsed_json);
 
-  // curl_slist_free_all(list);
-  // curl_easy_cleanup(curl);
-  // free(mem.response);
+  curl_slist_free_all(list);
+  curl_easy_cleanup(curl);
+  free(mem.response);
 
   return result_uri;
 }
@@ -429,7 +425,7 @@ char *gemini_request(char *gemini_url, char **file_uris, char *gemini_api_key,
 
     curl_easy_perform(curl);
 
-    printf("%s\n", mem.response);
+    // printf("%s\n", mem.response);
 
     cJSON *mem_res = cJSON_Parse(mem.response);
     cJSON *candidates = cJSON_GetObjectItemCaseSensitive(mem_res, "candidates");
@@ -440,13 +436,13 @@ char *gemini_request(char *gemini_url, char **file_uris, char *gemini_api_key,
     cJSON *first_part = cJSON_GetArrayItem(parts_obj, 0);
     cJSON *text = cJSON_GetObjectItemCaseSensitive(first_part, "text");
 
-    printf("im here\n");
+    // printf("im here\n");
 
     char *gemini_response = NULL;
     char *cleaned_text = replace_escaped_ansi(text->valuestring);
     gemini_response = strdup(cleaned_text);
 
-    printf("gemini_res: %s\n", gemini_response);
+    // printf("gemini_res: %s\n", gemini_response);
 
     cJSON_Delete(mem_res);
 
@@ -469,19 +465,41 @@ char *gemini_request(char *gemini_url, char **file_uris, char *gemini_api_key,
 }
 
 int main(void) {
-  printf("\033[93m");
+#ifdef _WIN32
+  // set both input and output to UTF-8
+  SetConsoleOutputCP(CP_UTF8);
+  SetConsoleCP(CP_UTF8);
+#endif
+
+  // printf("\033[93m");
+
+  // █▀▀▀ █  █ █▀▀▀ █▀▀▀ █▀▀█ █▀▀▀ █▀▀▀   █▀▀█ ▀
+  // ▀▀▀█ █░░█ █░░░ █░░░ █▀▀▀ ▀▀▀█ ▀▀▀█   █▀▀█ █
+  // ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀ ▀  ▀ ▀
+  //                                  ▄
+  // █▀▀█ █▀▀█ █▀▀█ █▀▀▄ █▀▀▀ █▀▀█ █▀▀█ █▀▀█
+  // █░░█ █░░█ █▀▀▀ █░░█ █░░░ █░░█ █░░█ █▀▀▀
+  // ▀▀▀▀ █▀▀▀ ▀▀▀▀ ▀  ▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀
+  //                                v0.15.18
+  //       ::::::::  :::    :::  ::::::::   ::::::::  :::::::::: ::::::::
+  //       ::::::::
+  //     :+:    :+: :+:    :+: :+:    :+: :+:    :+: :+:       :+:    :+: :+:
+  //     :+:
+  //    +:+        +:+    +:+ +:+        +:+        +:+       +:+        +:+
+  //   +#++:++#++ +#+    +:+ +#+        +#+        +#++:++#  +#++:++#++
+  //   +#++:++#++
+  //         +#+ +#+    +#+ +#+        +#+        +#+              +#+ +#+
+  // #+#    #+# #+#    #+# #+#    #+# #+#    #+# #+#       #+#    #+# #+#    #+#
+  // ########   ########   ########   ########  ########## ########   ########
 
   puts(R"(
-        ::::::::  :::    :::  ::::::::   ::::::::  :::::::::: ::::::::   :::::::: 
-      :+:    :+: :+:    :+: :+:    :+: :+:    :+: :+:       :+:    :+: :+:    :+: 
-     +:+        +:+    +:+ +:+        +:+        +:+       +:+        +:+         
-    +#++:++#++ +#+    +:+ +#+        +#+        +#++:++#  +#++:++#++ +#++:++#++   
-          +#+ +#+    +#+ +#+        +#+        +#+              +#+        +#+    
-  #+#    #+# #+#    #+# #+#    #+# #+#    #+# #+#       #+#    #+# #+#    #+#     
-  ########   ########   ########   ########  ########## ########   ########       
+  █▀▀▀ █  █ █▀▀▀ █▀▀▀ █▀▀█ █▀▀▀ █▀▀▀
+  ▀▀▀█ █░░█ █░░░ █░░░ █▀▀▀ ▀▀▀█ ▀▀▀█
+  ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀
+  v0.1.10
   )");
 
-  printf("\033[0m");
+  // printf("\033[0m");
 
   setvbuf(stdout, NULL, _IONBF, 0);
 
@@ -528,6 +546,8 @@ int main(void) {
       // "- For any other question, answer it directly without introduction "
       // "- Never say 'I understand', 'Hello', or 'How can I help' "
       // "- Be concise, informative, and get straight to the point "
+      "CRITICAL RESPONSE RULES: "
+      "- Don't reply with \"Okay, I understand.\""
 
       "SUCCESS is a collaboration platform designed for UCCians to connect, "
       "learn, "
@@ -566,8 +586,6 @@ int main(void) {
       "- Don't use line seperators"
       "syntax.";
 
-  // "CRITICAL RESPONSE RULES: "
-  // "- Don't reply with \"Okay, I understand.\"";
   char userPrompt[512];
   char fullPrompt[4000];
 
@@ -580,7 +598,7 @@ int main(void) {
     char **file_uris = NULL;
     char *res_gemini_req = NULL;
 
-    printf("Success Chatbot v0.8\n\033[97mEnter your prompt \033[34m[1 to "
+    printf("\033[97mEnter your prompt \033[34m[1 to "
            "attach files, enter 0 to "
            "exit]: "
            "\033[0m");
@@ -619,7 +637,7 @@ int main(void) {
 
       int capacity = 0;
 
-      printf("im here loop\n");
+      // printf("im here loop\n");
 
       for (size_t i = 0; i < total_file_num; ++i) {
         nfdchar_t *path = NFD_PathSet_GetPath(&pathSet, i);
@@ -628,19 +646,19 @@ int main(void) {
         unsigned char *file_data = read_file_b64(path, &encoded_len);
         const char *ext = get_file_mime_type(path);
 
-        printf("im here loop 2\n");
+        // printf("im here loop 2\n");
 
         char *res_upload_url =
             get_upload_url(encoded_len, gemini_file_url->valuestring,
                            gemini_api_key->valuestring, (char *)ext);
 
-        printf("im here loop 3\n");
+        // printf("im here loop 3\n");
 
         char *res_file_uri =
             get_file_uri(file_data, encoded_len, path, res_upload_url,
                          gemini_api_key->valuestring, (char *)ext);
 
-        printf("im here loop 4\n");
+        // printf("im here loop 4\n");
 
         capacity = (capacity == 0) ? 1 : (capacity + 1);
         char **new_ext = realloc(exts, (capacity) * sizeof(char *));
@@ -676,7 +694,7 @@ int main(void) {
     pthread_cancel(generate_thread);
     pthread_join(generate_thread, NULL);
 
-    printf("✔\n\033[97mGemini response:\n%s\n", res_gemini_req);
+    printf("✓\n\033[97mGemini response:\n%s\n", res_gemini_req);
 
     if (query_with_file) {
       for (size_t i = 0; i < total_file_num; i++) {
