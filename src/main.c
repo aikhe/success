@@ -46,6 +46,17 @@ int main(void) {
   SetConsoleCP(CP_UTF8);
 #endif
 
+  initscr();            // initialize the screen
+  cbreak();             // disable line buffering, get input immediately
+  noecho();             // don't print typed characters
+  keypad(stdscr, TRUE); // enable arrow keys and function keys
+  curs_set(0);          // hide curso
+
+  printw("Hello PDCurses!\n"); // print text to stdscr
+  refresh();                   // actually show it on the terminal
+
+  getch(); // wait for a key press
+
   // printf("\033[93m");
 
   puts(R"(
