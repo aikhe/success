@@ -13,6 +13,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <time.h>
+#include <windows.h>
+#undef MOUSE_MOVED // remove redefinition errors from wincon.h macro
+#include <curses.h>
 
 // remove compilation errors when testing memory leaks
 // with valgrind on unix based systems
