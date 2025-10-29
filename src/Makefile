@@ -1,7 +1,7 @@
 CC = gcc
 CFLAGS = -Wall -g
 PROGRAM ?= main
-SRC = main.c utils/get_file_mime_type.c utils/read_file.c utils/replace_escaped_ansii.c utils/read_file_b64.c utils/gemini_loading.c callbacks/write_callback.c
+SRC = main.c utils/get_file_mime_type.c utils/read_file.c utils/replace_escaped_ansii.c utils/read_file_b64.c utils/gemini_loading.c callbacks/write_callback.c utils/grep_string.c gemini_api/get_upload_url.c gemini_api/get_file_uri.c gemini_api/gemini_request.c
 
 # OBJ = $(SRC:.c=.o)
 BUILD_DIR = builds

@@ -4,6 +4,15 @@
 #define __declspec(x)
 #endif
 
+#include <cjson/cJSON.h>
+#include <curl/curl.h>
+#include <nfd.h>
+#include <pthread.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <time.h>
+
 #include "base64.h"
 #include <cjson/cJSON.h>
 #include <curl/curl.h>
