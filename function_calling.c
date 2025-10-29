@@ -220,7 +220,7 @@ char *grep_string(const char *data) {
     memcpy(line, line_start, line_len);
     line[line_len] = '\0';
 
-    const char *fo = strstr(line, "x-goog-upload-url:");
+    const char *fo = strstr(line, "X-Goog-Upload-URL:");
     if (fo != NULL) {
       const char *url_start = strstr(fo, "https://");
       if (url_start) {
@@ -281,6 +281,8 @@ char *get_upload_url(long int image_len, char *gemini_file_url,
   curl_easy_setopt(curl, CURLOPT_BUFFERSIZE, 5000L);
   curl_easy_setopt(curl, CURLOPT_CONNECTTIMEOUT, 5L);
   curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1L);
+  // verbose logging
+  curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 
   curl_easy_setopt(curl, CURLOPT_URL, gemini_file_url);
   curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
@@ -295,6 +297,8 @@ char *get_upload_url(long int image_len, char *gemini_file_url,
 
   char *res_url = grep_string(mem.response);
 
+  printf("res_url: %s\n", res_url);
+
   curl_slist_free_all(list);
   free(mem.response);
   curl_easy_cleanup(curl);
@@ -303,7 +307,8 @@ char *get_upload_url(long int image_len, char *gemini_file_url,
 }
 
 char *get_file_uri(unsigned char *image_data, long int image_len,
-                   char *image_path, char *upload_url, char *gemini_api_key) {
+                   char *image_path, char *upload_url, char *gemini_api_key,
+                   char *file_mime_type) {
   Memory mem = {malloc(1), 0};
 
   CURL *curl = curl_easy_init();
@@ -314,11 +319,13 @@ char *get_file_uri(unsigned char *image_data, long int image_len,
   char *content_length = "Content-Length:";
   char *upload_offset = "X-Goog-Upload-Offset: 0";
   char *upload_command = "X-Goog-Upload-Command: upload, finalize";
-  char *content_type = "Content-Type: image/png";
+  char content_type[512];
   char length[512];
 
   snprintf(auth_header, sizeof(auth_header), "%s %s", api_key, gemini_api_key);
   snprintf(length, sizeof(length), "%s %ld", content_length, image_len);
+  snprintf(content_type, sizeof(length), "%s %s",
+           "Content-Type:", file_mime_type);
 
   list = curl_slist_append(list, auth_header);
   list = curl_slist_append(list, length);
@@ -339,19 +346,29 @@ char *get_file_uri(unsigned char *image_data, long int image_len,
 
   curl_easy_setopt(curl, CURLOPT_CAINFO, "cacert-2025-09-09.pem");
 
+  long response_code;
+  curl_easy_getinfo(curl, CURLINFO_RESPONSE_CODE, &response_code);
+  printf("HTTP Response Code: %ld\n", response_code);
+
   curl_easy_perform(curl);
+
+  printf("GET FILE URI:\n%s\n", mem.response);
 
   char *result_uri = NULL;
   cJSON *parsed_json = cJSON_Parse(mem.response);
   cJSON *file = cJSON_GetObjectItemCaseSensitive(parsed_json, "file");
+  char *req_body_json_str = cJSON_Print(file);
+  printf("im here uri: %s\n", req_body_json_str);
   cJSON *uri = cJSON_GetObjectItemCaseSensitive(file, "uri");
   result_uri = strdup(uri->valuestring);
 
+  printf("im here uri: %s\n", uri->valuestring);
+
   cJSON_Delete(parsed_json);
 
-  curl_slist_free_all(list);
-  curl_easy_cleanup(curl);
-  free(mem.response);
+  // curl_slist_free_all(list);
+  // curl_easy_cleanup(curl);
+  // free(mem.response);
 
   return result_uri;
 }
@@ -412,7 +429,7 @@ char *gemini_request(char *gemini_url, char **file_uris, char *gemini_api_key,
 
     curl_easy_perform(curl);
 
-    // printf("%s\n", mem.response);
+    printf("%s\n", mem.response);
 
     cJSON *mem_res = cJSON_Parse(mem.response);
     cJSON *candidates = cJSON_GetObjectItemCaseSensitive(mem_res, "candidates");
@@ -423,9 +440,13 @@ char *gemini_request(char *gemini_url, char **file_uris, char *gemini_api_key,
     cJSON *first_part = cJSON_GetArrayItem(parts_obj, 0);
     cJSON *text = cJSON_GetObjectItemCaseSensitive(first_part, "text");
 
+    printf("im here\n");
+
     char *gemini_response = NULL;
     char *cleaned_text = replace_escaped_ansi(text->valuestring);
     gemini_response = strdup(cleaned_text);
+
+    printf("gemini_res: %s\n", gemini_response);
 
     cJSON_Delete(mem_res);
 
@@ -499,14 +520,14 @@ int main(void) {
   }
 
   char *systemPrompt =
-      "CRITICAL RESPONSE RULES: "
-      "- Answer ONLY what is asked - nothing more, nothing less "
-      "- NO greetings, NO asking questions back, NO offering help "
-      "- When asked 'what is SUCCESS', describe the platform directly "
-      "- When asked 'who are you', say you are SUCCESS AI "
-      "- For any other question, answer it directly without introduction "
-      "- Never say 'I understand', 'Hello', or 'How can I help' "
-      "- Be concise, informative, and get straight to the point "
+      // "CRITICAL RESPONSE RULES: "
+      // "- Answer ONLY what is asked - nothing more, nothing less "
+      // "- NO greetings, NO asking questions back, NO offering help "
+      // "- When asked 'what is SUCCESS', describe the platform directly "
+      // "- When asked 'who are you', say you are SUCCESS AI "
+      // "- For any other question, answer it directly without introduction "
+      // "- Never say 'I understand', 'Hello', or 'How can I help' "
+      // "- Be concise, informative, and get straight to the point "
 
       "SUCCESS is a collaboration platform designed for UCCians to connect, "
       "learn, "
@@ -543,10 +564,10 @@ int main(void) {
       "│, •)."
       "- Output should look like a well-formatted CLI report — no markdown "
       "- Don't use line seperators"
-      "syntax."
+      "syntax.";
 
-      "CRITICAL RESPONSE RULES: "
-      "- Don't reply with \"Okay, I understand.\"";
+  // "CRITICAL RESPONSE RULES: "
+  // "- Don't reply with \"Okay, I understand.\"";
   char userPrompt[512];
   char fullPrompt[4000];
 
@@ -598,6 +619,8 @@ int main(void) {
 
       int capacity = 0;
 
+      printf("im here loop\n");
+
       for (size_t i = 0; i < total_file_num; ++i) {
         nfdchar_t *path = NFD_PathSet_GetPath(&pathSet, i);
 
@@ -605,12 +628,19 @@ int main(void) {
         unsigned char *file_data = read_file_b64(path, &encoded_len);
         const char *ext = get_file_mime_type(path);
 
+        printf("im here loop 2\n");
+
         char *res_upload_url =
             get_upload_url(encoded_len, gemini_file_url->valuestring,
                            gemini_api_key->valuestring, (char *)ext);
+
+        printf("im here loop 3\n");
+
         char *res_file_uri =
             get_file_uri(file_data, encoded_len, path, res_upload_url,
-                         gemini_api_key->valuestring);
+                         gemini_api_key->valuestring, (char *)ext);
+
+        printf("im here loop 4\n");
 
         capacity = (capacity == 0) ? 1 : (capacity + 1);
         char **new_ext = realloc(exts, (capacity) * sizeof(char *));
