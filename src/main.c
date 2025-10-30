@@ -13,6 +13,12 @@
 #include <string.h>
 #include <time.h>
 
+#include <windows.h>
+#undef MOUSE_MOVED // remove redefinition errors from wincon.h macro
+#include <curses.h>
+
+#include "pages/introduction.h"
+
 #include "gemini_api/gemini_request.h"
 #include "gemini_api/get_file_uri.h"
 #include "gemini_api/get_upload_url.h"
@@ -22,67 +28,50 @@
 #include "utils/read_file.h"
 #include "utils/read_file_b64.h"
 
-#include <windows.h>
-#undef MOUSE_MOVED // remove redefinition errors from wincon.h macro
-#include <curses.h>
-
 #define QUOTE(...) #__VA_ARGS__ // pre-processor to turn content into string
 
-#ifdef _WIN32
-// enable ANSI support for windows cmd
 void enableVirtualTerminal() {
+#ifdef _WIN32
+  // enable ANSI support for windows cmd
   HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
   DWORD dwMode = 0;
   GetConsoleMode(hOut, &dwMode);
   dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
   SetConsoleMode(hOut, dwMode);
-}
-#endif
 
-int main(void) {
-#ifdef _WIN32
   // set both input and output to UTF-8
   SetConsoleOutputCP(CP_UTF8);
   SetConsoleCP(CP_UTF8);
 #endif
+}
 
-  initscr();            // initialize the screen
-  cbreak();             // disable line buffering, get input immediately
-  noecho();             // don't print typed characters
-  keypad(stdscr, TRUE); // enable arrow keys and function keys
-  curs_set(0);          // hide curso
+int main(void) {
+  enableVirtualTerminal();
 
-  printw("Hello PDCurses!\n"); // print text to stdscr
-  refresh();                   // actually show it on the terminal
-
-  getch(); // wait for a key press
+  introduction_page();
 
   // printf("\033[93m");
-
   puts(R"(
   █▀▀▀ █  █ █▀▀▀ █▀▀▀ █▀▀█ █▀▀▀ █▀▀▀
   ▀▀▀█ █░░█ █░░░ █░░░ █▀▀▀ ▀▀▀█ ▀▀▀█
   ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀
   v0.1.10
   )");
-
   // printf("\033[0m");
 
-  setvbuf(stdout, NULL, _IONBF, 0);
-
-#ifdef _WIN32
-  enableVirtualTerminal();
-#endif
+  // setvbuf(stdout, NULL, _IONBF, 0);
 
   char *env_json = read_file("../env.json");
 
   cJSON *env = cJSON_Parse(env_json);
   if (!env) {
+    printf("no env\n");
     const char *error_ptr = cJSON_GetErrorPtr();
 
     if (error_ptr) {
       fprintf(stderr, "[ERROR] Error parsing JSON at %s\n", error_ptr);
     }
+    printf("no env\n");
 
     free(env_json);
     return EXIT_FAILURE;
@@ -245,7 +234,7 @@ int main(void) {
       //   printf("file_uri %zu: %s\n", j + 1, file_uris[j]);
       // }
     } else if (nfd_res == NFD_CANCEL) {
-      // puts("User pressed cancel.");
+      puts("User pressed cancel.");
     } else {
       printf("Error: %s\n", NFD_GetError());
     }
