@@ -1,6 +1,8 @@
 #include <locale.h>
 
 #include "pages/introduction.h"
+#include "pages/menu.h"
+#include "pages/test.h"
 
 void enableVirtualTerminal() {
 #ifdef _WIN32
@@ -22,10 +24,8 @@ void enableVirtualTerminal() {
 }
 
 int main(void) {
-  // Set locale BEFORE calling any curses functions
-  setlocale(LC_ALL, "en_US.UTF-8");
+  // setlocale(LC_ALL, "en_US.UTF-8");
 
-// On Windows, try UTF-8 locale if the above fails
 #ifdef _WIN32
   if (!setlocale(LC_ALL, "en_US.UTF-8")) {
     setlocale(LC_ALL, "C.UTF-8");
@@ -35,6 +35,10 @@ int main(void) {
   enableVirtualTerminal();
 
   introduction_page();
+
+  // menu();
+
+  // test();
 
   return 0;
 }

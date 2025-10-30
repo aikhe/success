@@ -3,12 +3,16 @@
 // proud of the introduction page tho i did it myself :>
 
 #include "introduction.h"
+
 #include "curses.h"
 #include <sqlite3.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <winuser.h>
+
+#include "menu.h"
+
 #ifdef _WIN32
 #include <direct.h>
 #define mkdir(dir, mode) _mkdir(dir)
@@ -943,7 +947,7 @@ void signup_page(void) {
       int content_bottom = y_selection + selection_h + 4;
       draw_content_guide(content_bottom,
                          " [ESC] Back   [TAB] Next   [ENTER] Submit ");
-      
+
       // Draw status bar
       draw_status_bar(" Success v0.1.10 ", " Made with love<3 ");
     } else if (ch == 27) { // ESC
@@ -1104,7 +1108,7 @@ void signup_page(void) {
 
               // Redirect to appropriate page based on account type
               if (strcmp(userinfo, "student") == 0) {
-                student_page();
+                menu();
               } else if (strcmp(userinfo, "teacher") == 0) {
                 teacher_page();
               } else {
@@ -1150,7 +1154,7 @@ void signup_page(void) {
               int content_bottom = y_selection + selection_h + 4;
               draw_content_guide(content_bottom,
                                  " [ESC] Back   [TAB] Next   [ENTER] Submit ");
-              
+
               // Draw status bar
               draw_status_bar(" Success v0.1.10 ", " Made with love<3 ");
 
@@ -1534,7 +1538,7 @@ void login_page(void) {
       int content_bottom = y_password + input_bar_h + 4;
       draw_content_guide(content_bottom,
                          " [ESC] Back   [TAB] Next   [ENTER] Submit ");
-      
+
       // Draw status bar
       draw_status_bar(" Success v0.1.10 ", " Made with love<3 ");
     } else if (ch == 27) { // ESC
@@ -1597,7 +1601,7 @@ void login_page(void) {
           endwin();
 
           if (strcmp(userinfo, "student") == 0) {
-            student_page();
+            menu();
           } else if (strcmp(userinfo, "teacher") == 0) {
             teacher_page();
           } else {
@@ -1661,87 +1665,6 @@ void login_page(void) {
                        display_buf, password_cursor);
         }
       }
-    }
-  }
-
-  clear();
-  refresh();
-  endwin();
-}
-
-void student_page(void) {
-  initscr();
-  cbreak();
-  noecho();
-  keypad(stdscr, TRUE);
-  curs_set(0);
-
-  start_color();
-  if (can_change_color() && COLORS > 16) {
-    short DARK_GRAY = 16;
-    short GRAY_2 = 17;
-    short FOREGROUND = 18;
-    short ORANGE = 19;
-    short BLACK = 20;
-    short BLUE = 21;
-    short GRAY_3 = 22;
-    short GRAY_4 = 23;
-
-    init_color(DARK_GRAY, RGB_TO_NCURSES(30, 30, 30));
-    init_color(GRAY_2, RGB_TO_NCURSES(128, 128, 128));
-    init_color(FOREGROUND, RGB_TO_NCURSES(238, 238, 238));
-    init_color(ORANGE, RGB_TO_NCURSES(243, 173, 128));
-    init_color(BLACK, RGB_TO_NCURSES(10, 10, 10));
-    init_color(BLUE, RGB_TO_NCURSES(92, 156, 245));
-    init_color(GRAY_3, RGB_TO_NCURSES(53, 53, 53));
-    init_color(GRAY_4, RGB_TO_NCURSES(16, 16, 16));
-
-    init_pair(1, COLOR_WHITE, DARK_GRAY);
-    init_pair(2, GRAY_2, BLACK);
-    init_pair(3, FOREGROUND, BLACK);
-    init_pair(4, ORANGE, BLACK);
-    init_pair(5, COLOR_WHITE, BLACK);
-    init_pair(6, ORANGE, DARK_GRAY);
-    init_pair(7, BLACK, BLUE);
-    init_pair(8, COLOR_WHITE, GRAY_3);
-    init_pair(9, COLOR_WHITE, GRAY_4);
-  }
-
-  wbkgd(stdscr, COLOR_PAIR(5));
-  leaveok(stdscr, TRUE);
-
-  const char *welcome_text = R"(
-  Welcome Student!
-  
-  Student dashboard coming soon...
-  )";
-
-  int welcome_h = count_lines(welcome_text);
-  int screen_h = getmaxy(stdscr);
-  int y_welcome = (screen_h - welcome_h) / 2;
-  if (y_welcome < 0)
-    y_welcome = 0;
-
-  WINDOW *welcome_win =
-      draw_centered_win(stdscr, welcome_text, y_welcome, 0, 0);
-  draw_sub_win(welcome_win, welcome_text, 0, 0, 4);
-
-  draw_status_bar(" Student Dashboard ", " [ESC] Exit ");
-
-  int ch;
-  while ((ch = getch()) != 27 && ch != KEY_RESIZE) {
-    if (ch == KEY_RESIZE) {
-      resize_term(0, 0);
-      clear();
-
-      screen_h = getmaxy(stdscr);
-      y_welcome = (screen_h - welcome_h) / 2;
-      if (y_welcome < 0)
-        y_welcome = 0;
-
-      welcome_win = draw_centered_win(stdscr, welcome_text, y_welcome, 0, 0);
-      draw_sub_win(welcome_win, welcome_text, 0, 0, 4);
-      draw_status_bar(" Student Dashboard ", " [ESC] Exit ");
     }
   }
 

@@ -6,8 +6,4 @@ typedef struct Memory {
   size_t size;
 } Memory;
 
-typedef struct CallType {
-  char *call_type;
-} CallType;
-
 #endif
