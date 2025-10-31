@@ -69,6 +69,8 @@ WINDOW *draw_centered_win(WINDOW *win, const char *text, int y, int text_pos_x,
   // int h, w;
   // getmaxyx(win, h, w);
 
+  // wbkgd(win, COLOR_PAIR(5));
+
   int w = getmaxx(win);
 
   wrefresh(win);
@@ -86,6 +88,7 @@ WINDOW *draw_centered_win(WINDOW *win, const char *text, int y, int text_pos_x,
   int start_x = (w - box_w) / 2;
 
   WINDOW *boxwin = newwin(box_h, box_w, y, start_x);
+  wbkgd(boxwin, COLOR_PAIR(5));
 
   if (with_border) {
     cchar_t vline, hline, ul, ur, ll, lr;
@@ -133,48 +136,39 @@ WINDOW *draw_centered_win(WINDOW *win, const char *text, int y, int text_pos_x,
   return boxwin;
 }
 
-static void draw_status_bar(const char *left, const char *right) {
-  int h = getmaxy(stdscr);
-  int w = getmaxx(stdscr);
-
-  // Avoid affecting cursor placement when drawing the status bar
-  leaveok(stdscr, TRUE);
-  attron(A_REVERSE);
-  mvhline(h - 1, 0, ' ', w);
-  mvaddnstr(h - 1, 1, left, w - 2);
-  int right_x = w - (int)strlen(right) - 2;
-  if (right_x > 1) {
-    mvaddstr(h - 1, right_x, right);
-  }
-  attroff(A_REVERSE);
-  refresh();
-}
-
-static WINDOW *draw_input_bar(const char *model_text, int *content_y,
-                              int *content_x, int *content_w) {
-  int h = getmaxy(stdscr);
+static WINDOW *draw_input_bar(int *content_y, int *content_x, int *content_w) {
   int w = getmaxx(stdscr);
 
   int bar_h = 3;
-  int bar_w = w - (w / 3);
-  if (bar_w < 30)
-    bar_w = w - 4;
-  if (bar_w > w - 4)
-    bar_w = w - 4;
+  int bar_w = 70;
+  int bar_wb = 72;
 
-  int y = h / 2;
+  // int y = h / 2;
+  int y = *content_y;
   int x = (w - bar_w) / 2;
+  int xb = (w - bar_wb) / 2;
 
   WINDOW *ibox = newwin(bar_h, bar_w, y, x);
-  // Filled background for the whole bar (dark gray style)
-  wbkgd(ibox, COLOR_PAIR(1) | A_DIM);
+  WINDOW *ibox_bars = newwin(bar_h, bar_wb, y, xb);
+  wbkgd(ibox, COLOR_PAIR(1));
+  wbkgd(ibox_bars, COLOR_PAIR(5));
   werase(ibox);
 
-  // Prompt on the left
-  mvwaddstr(ibox, 1, 2, "> ");
+  // Draw vertical bars on left and right edges
+  cchar_t vbar;
+  setcchar(&vbar, L"│", 0, 0, NULL);
+  for (int i = 0; i < bar_h; i++) {
+    mvwadd_wch(ibox_bars, i, 0, &vbar);
+    mvwadd_wch(ibox_bars, i, bar_wb - 1, &vbar);
+  }
+
+  // Prompt on the left (adjusted for the left bar)
+  wattron(ibox, COLOR_PAIR(6) | A_DIM);
+  mvwaddstr(ibox, 1, 1, "> ");
+  wattroff(ibox, COLOR_PAIR(6) | A_DIM);
 
   // Content area geometry for caller
-  int inner_x = 4;                   // inside ibox, after prompt
+  int inner_x = 3;                   // inside ibox, after prompt
   int inner_w = bar_w - inner_x - 2; // leave right padding
   if (inner_w < 1)
     inner_w = 1;
@@ -185,10 +179,16 @@ static WINDOW *draw_input_bar(const char *model_text, int *content_y,
   if (content_w)
     *content_w = inner_w;
 
+  wrefresh(ibox_bars);
   wrefresh(ibox);
 
-  // Hint below the bar (left-aligned)
   mvaddstr(y + bar_h, x, "enter send");
+  const char *right_hint = "Success Platform";
+  int right_x = x + bar_w - (int)strlen(right_hint);
+  if (right_x > x) {
+    mvaddstr(y + bar_h, right_x, right_hint);
+  }
+
   refresh();
 
   return ibox;
@@ -227,6 +227,10 @@ static void render_input(WINDOW *ibox, int content_y, int content_x,
 void draw_sub_win(WINDOW *win, const char *text, int text_pos_y, int text_pos_x,
                   int color) {
   // int w = getmaxx(win);
+
+  wbkgd(win, COLOR_PAIR(5));
+
+  wrefresh(win);
 
   int num_lines = count_lines(text);
 
@@ -272,6 +276,23 @@ void draw_sub_win(WINDOW *win, const char *text, int text_pos_y, int text_pos_x,
   wrefresh(win);
 }
 
+static void draw_status_bar(const char *left, const char *right) {
+  int h = getmaxy(stdscr);
+  int w = getmaxx(stdscr);
+
+  // Avoid affecting cursor placement when drawing the status bar
+  leaveok(stdscr, TRUE);
+  attron(A_REVERSE);
+  mvhline(h - 1, 0, ' ', w);
+  mvaddnstr(h - 1, 1, left, w - 2);
+  int right_x = w - (int)strlen(right) - 2;
+  if (right_x > 1) {
+    mvaddstr(h - 1, right_x, right);
+  }
+  attroff(A_REVERSE);
+  refresh();
+}
+
 void introduction_page(void) {
   initscr();
   cbreak();
@@ -286,17 +307,24 @@ void introduction_page(void) {
     short GRAY_2 = 17;
     short FOREGROUND = 18;
     short ORANGE = 19;
+    short BACKGROUND = 20;
 
     init_color(DARK_GRAY, RGB_TO_NCURSES(30, 30, 30));
     init_color(GRAY_2, RGB_TO_NCURSES(128, 128, 128));
     init_color(FOREGROUND, RGB_TO_NCURSES(238, 238, 238));
     init_color(ORANGE, RGB_TO_NCURSES(243, 173, 128));
+    init_color(BACKGROUND, RGB_TO_NCURSES(10, 10, 10));
 
     init_pair(1, COLOR_WHITE, DARK_GRAY);
-    init_pair(2, GRAY_2, COLOR_BLACK);
-    init_pair(3, FOREGROUND, COLOR_BLACK);
-    init_pair(4, ORANGE, COLOR_BLACK);
+    init_pair(2, GRAY_2, BACKGROUND);
+    init_pair(3, FOREGROUND, BACKGROUND);
+    init_pair(4, ORANGE, BACKGROUND);
+
+    init_pair(5, COLOR_WHITE, BACKGROUND);
+    init_pair(6, ORANGE, DARK_GRAY);
   }
+
+  wbkgd(stdscr, COLOR_PAIR(5));
 
   // Keep stdscr from moving the hardware cursor; we'll position it via input
   // bar
@@ -355,8 +383,8 @@ void introduction_page(void) {
   draw_sub_win(authwin, auth_coms, 0, 0, 4);
 
   // Draw middle input bar and bottom status bar
-  int input_y = 0, input_x = 0, input_w = 0;
-  WINDOW *input_bar = draw_input_bar("", &input_y, &input_x, &input_w);
+  int input_y = 18, input_x = 0, input_w = 0;
+  WINDOW *input_bar = draw_input_bar(&input_y, &input_x, &input_w);
   draw_status_bar("success  v0.1.10", "tab | HOME");
 
   char input_buf[512] = {0};
@@ -375,11 +403,8 @@ void introduction_page(void) {
       WINDOW *authwin = draw_centered_win(stdscr, auth, 13, 0, 1);
       draw_sub_win(authwin, auth_coms, 0, 0, 2);
 
-      // Redraw input bar and status bar on resize
-      if (input_bar) {
-        delwin(input_bar);
-      }
-      input_bar = draw_input_bar("", &input_y, &input_x, &input_w);
+      int input_y = 18, input_x = 0, input_w = 0;
+      WINDOW *input_bar = draw_input_bar(&input_y, &input_x, &input_w);
       draw_status_bar("success  v0.1.10", "tab | HOME");
       render_input(input_bar, input_y, input_x, input_w, input_buf, cursor_pos);
     } else if (ch == 10 || ch == KEY_ENTER) {
