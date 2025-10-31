@@ -2,6 +2,10 @@
 #include "curses.h"
 #include <stdio.h>
 #include <string.h>
+#include <winuser.h>
+
+#define RGB_TO_NCURSES(r, g, b)                                                \
+  ((r) * 1000 / 255), ((g) * 1000 / 255), ((b) * 1000 / 255)
 
 // Helper function to count lines in a string
 int count_lines(const char *text) {
@@ -129,8 +133,99 @@ WINDOW *draw_centered_win(WINDOW *win, const char *text, int y, int text_pos_x,
   return boxwin;
 }
 
-void draw_sub_win(WINDOW *win, const char *text, int text_pos_y,
-                  int text_pos_x) {
+static void draw_status_bar(const char *left, const char *right) {
+  int h = getmaxy(stdscr);
+  int w = getmaxx(stdscr);
+
+  // Avoid affecting cursor placement when drawing the status bar
+  leaveok(stdscr, TRUE);
+  attron(A_REVERSE);
+  mvhline(h - 1, 0, ' ', w);
+  mvaddnstr(h - 1, 1, left, w - 2);
+  int right_x = w - (int)strlen(right) - 2;
+  if (right_x > 1) {
+    mvaddstr(h - 1, right_x, right);
+  }
+  attroff(A_REVERSE);
+  refresh();
+}
+
+static WINDOW *draw_input_bar(const char *model_text, int *content_y,
+                              int *content_x, int *content_w) {
+  int h = getmaxy(stdscr);
+  int w = getmaxx(stdscr);
+
+  int bar_h = 3;
+  int bar_w = w - (w / 3);
+  if (bar_w < 30)
+    bar_w = w - 4;
+  if (bar_w > w - 4)
+    bar_w = w - 4;
+
+  int y = h / 2;
+  int x = (w - bar_w) / 2;
+
+  WINDOW *ibox = newwin(bar_h, bar_w, y, x);
+  // Filled background for the whole bar (dark gray style)
+  wbkgd(ibox, COLOR_PAIR(1) | A_DIM);
+  werase(ibox);
+
+  // Prompt on the left
+  mvwaddstr(ibox, 1, 2, "> ");
+
+  // Content area geometry for caller
+  int inner_x = 4;                   // inside ibox, after prompt
+  int inner_w = bar_w - inner_x - 2; // leave right padding
+  if (inner_w < 1)
+    inner_w = 1;
+  if (content_y)
+    *content_y = y + 1;
+  if (content_x)
+    *content_x = x + inner_x;
+  if (content_w)
+    *content_w = inner_w;
+
+  wrefresh(ibox);
+
+  // Hint below the bar (left-aligned)
+  mvaddstr(y + bar_h, x, "enter send");
+  refresh();
+
+  return ibox;
+}
+
+static void render_input(WINDOW *ibox, int content_y, int content_x,
+                         int content_w, const char *buf, int cursor_pos) {
+  if (!ibox)
+    return;
+
+  // Convert absolute to window-relative
+  int wy, wx;
+  getbegyx(ibox, wy, wx);
+  int rel_y = content_y - wy;
+  int rel_x = content_x - wx;
+
+  // Clear input area with the bar's background attributes
+  wattron(ibox, COLOR_PAIR(1) | A_DIM);
+  mvwhline(ibox, rel_y, rel_x, ' ', content_w);
+  wattroff(ibox, COLOR_PAIR(1) | A_DIM);
+
+  // Draw text inside the ibox
+  int len = (int)strlen(buf);
+  if (len > content_w)
+    len = content_w;
+  mvwaddnstr(ibox, rel_y, rel_x, buf, len);
+
+  // Move visible cursor
+  int cx = rel_x + (cursor_pos > content_w ? content_w : cursor_pos);
+  wmove(ibox, rel_y, cx);
+  leaveok(ibox, FALSE);
+  curs_set(1);
+  wrefresh(ibox);
+}
+
+void draw_sub_win(WINDOW *win, const char *text, int text_pos_y, int text_pos_x,
+                  int color) {
   // int w = getmaxx(win);
 
   int num_lines = count_lines(text);
@@ -160,13 +255,13 @@ void draw_sub_win(WINDOW *win, const char *text, int text_pos_y,
       line_buf[trimmed_len] = '\0';
 
       if (trimmed_len > 0) {
-        wattron(win, COLOR_PAIR(1));
+        wattron(win, COLOR_PAIR(color));
         int lead = 0;
         while (line_buf[lead] == ' ' || line_buf[lead] == '\t') {
           lead++;
         }
         mvwaddstr(win, line_num - 1, text_pos_x + lead, line_buf + lead);
-        wattroff(win, COLOR_PAIR(1));
+        wattroff(win, COLOR_PAIR(color));
       }
 
       line_num++;
@@ -185,7 +280,27 @@ void introduction_page(void) {
   curs_set(0);
 
   start_color();
-  init_pair(1, COLOR_CYAN, COLOR_BLACK);
+  // Input bar colors (pair 3): dark gray background if possible
+  if (can_change_color() && COLORS > 16) {
+    short DARK_GRAY = 16;
+    short GRAY_2 = 17;
+    short FOREGROUND = 18;
+    short ORANGE = 19;
+
+    init_color(DARK_GRAY, RGB_TO_NCURSES(30, 30, 30));
+    init_color(GRAY_2, RGB_TO_NCURSES(128, 128, 128));
+    init_color(FOREGROUND, RGB_TO_NCURSES(238, 238, 238));
+    init_color(ORANGE, RGB_TO_NCURSES(243, 173, 128));
+
+    init_pair(1, COLOR_WHITE, DARK_GRAY);
+    init_pair(2, GRAY_2, COLOR_BLACK);
+    init_pair(3, FOREGROUND, COLOR_BLACK);
+    init_pair(4, ORANGE, COLOR_BLACK);
+  }
+
+  // Keep stdscr from moving the hardware cursor; we'll position it via input
+  // bar
+  leaveok(stdscr, TRUE);
 
   const char *ascii_art = R"(
   █▀▀▀ █  █ █▀▀▀ █▀▀▀ █▀▀█ █▀▀▀ █▀▀▀
@@ -198,7 +313,14 @@ void introduction_page(void) {
        █  █ █▀▀▀ █▀▀▀
        █░░█ █░░░ █░░░
        ▀▀▀▀ ▀▀▀▀ ▀▀▀▀
+                             v0.1.10
   )";
+
+  // const char *input_bar = R"(
+  // ┃                                                ┃
+  // ┃ >                                              ┃
+  // ┃                                                ┃
+  // )";
 
   const char *intro = R"(
     SUCCESS is a learning platform for UCCians designed to make
@@ -225,11 +347,21 @@ void introduction_page(void) {
   )";
 
   WINDOW *boxwin = draw_centered_win(stdscr, ascii_art, 1, 0, 0);
-  draw_sub_win(boxwin, ucc, 0, 0);
+  draw_sub_win(boxwin, ascii_art, 0, 0, 2);
+  draw_sub_win(boxwin, ucc, 0, 0, 3);
   WINDOW *intro_win = draw_centered_win(stdscr, intro, 6, 0, 0);
-  draw_sub_win(intro_win, success, 0, 0);
+  draw_sub_win(intro_win, success, 0, 0, 2);
   WINDOW *authwin = draw_centered_win(stdscr, auth, 13, 0, 1);
-  draw_sub_win(authwin, auth_coms, 0, 0);
+  draw_sub_win(authwin, auth_coms, 0, 0, 4);
+
+  // Draw middle input bar and bottom status bar
+  int input_y = 0, input_x = 0, input_w = 0;
+  WINDOW *input_bar = draw_input_bar("", &input_y, &input_x, &input_w);
+  draw_status_bar("success  v0.1.10", "tab | HOME");
+
+  char input_buf[512] = {0};
+  int cursor_pos = 0;
+  render_input(input_bar, input_y, input_x, input_w, input_buf, cursor_pos);
 
   int ch;
   while ((ch = getch()) != 'q') {
@@ -237,11 +369,35 @@ void introduction_page(void) {
       resize_term(0, 0);
       clear();
       WINDOW *boxwin = draw_centered_win(stdscr, ascii_art, 1, 0, 0);
-      draw_sub_win(boxwin, ucc, 0, 0);
+      draw_sub_win(boxwin, ucc, 0, 0, 2);
       WINDOW *intro_win = draw_centered_win(stdscr, intro, 6, 0, 0);
-      draw_sub_win(intro_win, success, 0, 0);
+      draw_sub_win(intro_win, success, 0, 0, 2);
       WINDOW *authwin = draw_centered_win(stdscr, auth, 13, 0, 1);
-      draw_sub_win(authwin, auth_coms, 0, 0);
+      draw_sub_win(authwin, auth_coms, 0, 0, 2);
+
+      // Redraw input bar and status bar on resize
+      if (input_bar) {
+        delwin(input_bar);
+      }
+      input_bar = draw_input_bar("", &input_y, &input_x, &input_w);
+      draw_status_bar("success  v0.1.10", "tab | HOME");
+      render_input(input_bar, input_y, input_x, input_w, input_buf, cursor_pos);
+    } else if (ch == 10 || ch == KEY_ENTER) {
+      // Submit (no-op for now)
+    } else if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {
+      if (cursor_pos > 0) {
+        cursor_pos--;
+        input_buf[cursor_pos] = '\0';
+        render_input(input_bar, input_y, input_x, input_w, input_buf,
+                     cursor_pos);
+      }
+    } else if (ch >= 32 && ch <= 126) {
+      if (cursor_pos < (int)sizeof(input_buf) - 1) {
+        input_buf[cursor_pos++] = (char)ch;
+        input_buf[cursor_pos] = '\0';
+        render_input(input_bar, input_y, input_x, input_w, input_buf,
+                     cursor_pos);
+      }
     }
   }
 
