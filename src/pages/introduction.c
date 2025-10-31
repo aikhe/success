@@ -151,12 +151,12 @@ static WINDOW *draw_input_bar(int *content_y, int *content_x, int *content_w) {
   WINDOW *ibox = newwin(bar_h, bar_w, y, x);
   WINDOW *ibox_bars = newwin(bar_h, bar_wb, y, xb);
   wbkgd(ibox, COLOR_PAIR(1));
-  wbkgd(ibox_bars, COLOR_PAIR(5));
+  wbkgd(ibox_bars, COLOR_PAIR(2));
   werase(ibox);
 
   // Draw vertical bars on left and right edges
   cchar_t vbar;
-  setcchar(&vbar, L"│", 0, 0, NULL);
+  setcchar(&vbar, L"┃", 0, 0, NULL);
   for (int i = 0; i < bar_h; i++) {
     mvwadd_wch(ibox_bars, i, 0, &vbar);
     mvwadd_wch(ibox_bars, i, bar_wb - 1, &vbar);
@@ -182,12 +182,17 @@ static WINDOW *draw_input_bar(int *content_y, int *content_x, int *content_w) {
   wrefresh(ibox_bars);
   wrefresh(ibox);
 
-  mvaddstr(y + bar_h, x, "enter send");
+  mvaddstr(y + bar_h, x, "enter");
+  wattron(stdscr, COLOR_PAIR(2));
+  mvaddstr(y + bar_h, x + 6, "send");
+  wattroff(stdscr, COLOR_PAIR(2));
+
   const char *right_hint = "Success Platform";
   int right_x = x + bar_w - (int)strlen(right_hint);
-  if (right_x > x) {
-    mvaddstr(y + bar_h, right_x, right_hint);
-  }
+  mvaddstr(y + bar_h, right_x, "Success");
+  wattron(stdscr, COLOR_PAIR(2));
+  mvaddstr(y + bar_h, right_x + 8, "Platform");
+  wattroff(stdscr, COLOR_PAIR(2));
 
   refresh();
 
@@ -206,9 +211,9 @@ static void render_input(WINDOW *ibox, int content_y, int content_x,
   int rel_x = content_x - wx;
 
   // Clear input area with the bar's background attributes
-  wattron(ibox, COLOR_PAIR(1) | A_DIM);
+  wattron(ibox, COLOR_PAIR(6) | A_DIM);
   mvwhline(ibox, rel_y, rel_x, ' ', content_w);
-  wattroff(ibox, COLOR_PAIR(1) | A_DIM);
+  wattroff(ibox, COLOR_PAIR(6) | A_DIM);
 
   // Draw text inside the ibox
   int len = (int)strlen(buf);
@@ -282,14 +287,20 @@ static void draw_status_bar(const char *left, const char *right) {
 
   // Avoid affecting cursor placement when drawing the status bar
   leaveok(stdscr, TRUE);
-  attron(A_REVERSE);
+
+  wattron(stdscr, COLOR_PAIR(9));
   mvhline(h - 1, 0, ' ', w);
-  mvaddnstr(h - 1, 1, left, w - 2);
-  int right_x = w - (int)strlen(right) - 2;
-  if (right_x > 1) {
-    mvaddstr(h - 1, right_x, right);
-  }
-  attroff(A_REVERSE);
+  wattroff(stdscr, COLOR_PAIR(9));
+
+  wattron(stdscr, COLOR_PAIR(8));
+  mvaddnstr(h - 1, 0, left, w - 2);
+  wattroff(stdscr, COLOR_PAIR(8));
+
+  int right_x = w - (int)strlen(right);
+  wattron(stdscr, COLOR_PAIR(7));
+  mvaddstr(h - 1, right_x, right);
+  wattroff(stdscr, COLOR_PAIR(7));
+
   refresh();
 }
 
@@ -307,21 +318,29 @@ void introduction_page(void) {
     short GRAY_2 = 17;
     short FOREGROUND = 18;
     short ORANGE = 19;
-    short BACKGROUND = 20;
+    short BLACK = 20;
+    short BLUE = 21;
+    short GRAY_3 = 22;
+    short GRAY_4 = 23;
 
     init_color(DARK_GRAY, RGB_TO_NCURSES(30, 30, 30));
     init_color(GRAY_2, RGB_TO_NCURSES(128, 128, 128));
     init_color(FOREGROUND, RGB_TO_NCURSES(238, 238, 238));
     init_color(ORANGE, RGB_TO_NCURSES(243, 173, 128));
-    init_color(BACKGROUND, RGB_TO_NCURSES(10, 10, 10));
+    init_color(BLACK, RGB_TO_NCURSES(10, 10, 10));
+    init_color(BLUE, RGB_TO_NCURSES(92, 156, 245));
+    init_color(GRAY_3, RGB_TO_NCURSES(53, 53, 53));
+    init_color(GRAY_4, RGB_TO_NCURSES(16, 16, 16));
 
     init_pair(1, COLOR_WHITE, DARK_GRAY);
-    init_pair(2, GRAY_2, BACKGROUND);
-    init_pair(3, FOREGROUND, BACKGROUND);
-    init_pair(4, ORANGE, BACKGROUND);
-
-    init_pair(5, COLOR_WHITE, BACKGROUND);
+    init_pair(2, GRAY_2, BLACK);
+    init_pair(3, FOREGROUND, BLACK);
+    init_pair(4, ORANGE, BLACK);
+    init_pair(5, COLOR_WHITE, BLACK);
     init_pair(6, ORANGE, DARK_GRAY);
+    init_pair(7, BLACK, BLUE);
+    init_pair(8, COLOR_WHITE, GRAY_3);
+    init_pair(9, COLOR_WHITE, GRAY_4);
   }
 
   wbkgd(stdscr, COLOR_PAIR(5));
@@ -331,17 +350,17 @@ void introduction_page(void) {
   leaveok(stdscr, TRUE);
 
   const char *ascii_art = R"(
-  █▀▀▀ █  █ █▀▀▀ █▀▀▀ █▀▀█ █▀▀▀ █▀▀▀
-  ▀▀▀█ █░░█ █░░░ █░░░ █▀▀▀ ▀▀▀█ ▀▀▀█
-  ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀
-                             v0.1.10
+  █▀▀▀ █  █ ▄▀▀▀ ▄▀▀▀ █▀▀█ █▀▀▀ █▀▀▀ █
+  ▀▀▀█ █░░█ █░░░ █░░░ █▀▀▀ ▀▀▀█ ▀▀▀█ ▀
+  ▀▀▀▀  ▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀
+                               v0.1.10
   )";
 
   const char *ucc = R"(
-       █  █ █▀▀▀ █▀▀▀
+       █  █ ▄▀▀▀ ▄▀▀▀
        █░░█ █░░░ █░░░
-       ▀▀▀▀ ▀▀▀▀ ▀▀▀▀
-                             v0.1.10
+        ▀▀▀ ▀▀▀▀ ▀▀▀▀
+                               v0.1.10
   )";
 
   // const char *input_bar = R"(
@@ -351,21 +370,21 @@ void introduction_page(void) {
   // )";
 
   const char *intro = R"(
-    SUCCESS is a learning platform for UCCians designed to make
-   studying engaging and effective. It offers tools like quizzes,
-   flashcards, streaks, and leaderboards—plus personalized study
-   methods like Pomodoro and active recall—to help students learn
-                     smarter and achieve more.
+  SUCCESS is a learning platform for UCCians designed to make
+  studying  engaging  and  effective.  It   offers tools like 
+  quizzes,   flashcards,   streaks,   and   leaderboards plus
+  personalized  study methods like Pomodoro and active recall
+  to    help   students  learn   smarter   and   achieve more.
   )";
 
   const char *success = R"(
-    SUCCESS
+  SUCCESS
   )";
 
   const char *auth = R"(
-  [l] login          To start using success ✦
-  [s] signup                Make an account ✔
-  [x] exit                    Stop and quit ⟡
+  [l] login          To start using Success
+  [s] signup                Make an account
+  [x] exit                    Stop and quit
   )";
 
   const char *auth_coms = R"(
@@ -374,18 +393,57 @@ void introduction_page(void) {
   [x] exit  
   )";
 
-  WINDOW *boxwin = draw_centered_win(stdscr, ascii_art, 1, 0, 0);
+  const char *auth_guide = R"(
+                     To start using Success
+                            Make an account
+                              Stop and quit
+  )";
+
+  const char *exit_dim = R"(
+
+
+                              Stop and quit
+  )";
+
+  // Calculate content heights
+  int ascii_h = count_lines(ascii_art);
+  int intro_h = count_lines(intro);
+  int auth_h = count_lines(auth);
+  int input_bar_h = 3; // from draw_input_bar
+  int status_bar_h = 1;
+
+  // Calculate spacing between sections
+  int spacing = 1;
+  int total_content_h =
+      ascii_h + spacing + intro_h + spacing + auth_h + spacing + input_bar_h;
+
+  // Get screen height and calculate centered starting position
+  // Leave space for status bar at bottom
+  int screen_h = getmaxy(stdscr);
+  int start_y = (screen_h - total_content_h - status_bar_h) / 2;
+  if (start_y < 0)
+    start_y = 0;
+
+  // Position each section relative to the centered start
+  int y_ascii = start_y - 1;
+  int y_intro = y_ascii + ascii_h + spacing;
+  int y_auth = y_intro + intro_h + spacing + 1;
+  int y_input = y_auth + auth_h + spacing + 1;
+
+  WINDOW *boxwin = draw_centered_win(stdscr, ascii_art, y_ascii, 0, 0);
   draw_sub_win(boxwin, ascii_art, 0, 0, 2);
   draw_sub_win(boxwin, ucc, 0, 0, 3);
-  WINDOW *intro_win = draw_centered_win(stdscr, intro, 6, 0, 0);
+  WINDOW *intro_win = draw_centered_win(stdscr, intro, y_intro, 0, 0);
   draw_sub_win(intro_win, success, 0, 0, 2);
-  WINDOW *authwin = draw_centered_win(stdscr, auth, 13, 0, 1);
+  WINDOW *authwin = draw_centered_win(stdscr, auth, y_auth, 0, 1);
   draw_sub_win(authwin, auth_coms, 0, 0, 4);
+  draw_sub_win(authwin, auth_guide, 0, 0, 2);
+  draw_sub_win(authwin, exit_dim, 0, 0, 2);
 
   // Draw middle input bar and bottom status bar
-  int input_y = 18, input_x = 0, input_w = 0;
+  int input_y = y_input, input_x = 0, input_w = 0;
   WINDOW *input_bar = draw_input_bar(&input_y, &input_x, &input_w);
-  draw_status_bar("success  v0.1.10", "tab | HOME");
+  draw_status_bar(" Success  v0.1.10 ", " Made with love<3 ");
 
   char input_buf[512] = {0};
   int cursor_pos = 0;
@@ -396,16 +454,44 @@ void introduction_page(void) {
     if (ch == KEY_RESIZE) {
       resize_term(0, 0);
       clear();
-      WINDOW *boxwin = draw_centered_win(stdscr, ascii_art, 1, 0, 0);
-      draw_sub_win(boxwin, ucc, 0, 0, 2);
-      WINDOW *intro_win = draw_centered_win(stdscr, intro, 6, 0, 0);
-      draw_sub_win(intro_win, success, 0, 0, 2);
-      WINDOW *authwin = draw_centered_win(stdscr, auth, 13, 0, 1);
-      draw_sub_win(authwin, auth_coms, 0, 0, 2);
 
-      int input_y = 18, input_x = 0, input_w = 0;
-      WINDOW *input_bar = draw_input_bar(&input_y, &input_x, &input_w);
-      draw_status_bar("success  v0.1.10", "tab | HOME");
+      // Recalculate content heights and positions
+      int ascii_h = count_lines(ascii_art);
+      int intro_h = count_lines(intro);
+      int auth_h = count_lines(auth);
+      int input_bar_h = 3;
+      int status_bar_h = 1;
+
+      int spacing = 1;
+      int total_content_h = ascii_h + spacing + intro_h + spacing + auth_h +
+                            spacing + input_bar_h;
+
+      int screen_h = getmaxy(stdscr);
+      int start_y = (screen_h - total_content_h - status_bar_h) / 2;
+      if (start_y < 0)
+        start_y = 0;
+
+      int y_ascii = start_y - 1;
+      int y_intro = y_ascii + ascii_h + spacing;
+      int y_auth = y_intro + intro_h + spacing + 1;
+      int y_input = y_auth + auth_h + spacing + 1;
+
+      WINDOW *boxwin = draw_centered_win(stdscr, ascii_art, y_ascii, 0, 0);
+      draw_sub_win(boxwin, ascii_art, 0, 0, 2);
+      draw_sub_win(boxwin, ucc, 0, 0, 3);
+      WINDOW *intro_win = draw_centered_win(stdscr, intro, y_intro, 0, 0);
+      draw_sub_win(intro_win, success, 0, 0, 2);
+      WINDOW *authwin = draw_centered_win(stdscr, auth, y_auth, 0, 1);
+      draw_sub_win(authwin, auth_coms, 0, 0, 4);
+      draw_sub_win(authwin, auth_guide, 0, 0, 2);
+      draw_sub_win(authwin, exit_dim, 0, 0, 2);
+
+      // Update outer scope variables (don't shadow them)
+      input_y = y_input;
+      input_x = 0;
+      input_w = 0;
+      input_bar = draw_input_bar(&input_y, &input_x, &input_w);
+      draw_status_bar(" Success  v0.1.10 ", " Made with love<3 ");
       render_input(input_bar, input_y, input_x, input_w, input_buf, cursor_pos);
     } else if (ch == 10 || ch == KEY_ENTER) {
       // Submit (no-op for now)
