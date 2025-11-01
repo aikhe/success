@@ -1,8 +1,20 @@
+// NOTE: Sign up and Login is heavily vibe coded since I dont really intend to
+// add that feature but it's on our proposal so it had to be done, I'm really
+// proud of the introduction page tho i did it myself :>
+
 #include "introduction.h"
 #include "curses.h"
+#include <sqlite3.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include <winuser.h>
+#ifdef _WIN32
+#include <direct.h>
+#define mkdir(dir, mode) _mkdir(dir)
+#else
+#include <sys/stat.h>
+#endif
 
 #define RGB_TO_NCURSES(r, g, b)                                                \
   ((r) * 1000 / 255), ((g) * 1000 / 255), ((b) * 1000 / 255)
@@ -199,6 +211,60 @@ static WINDOW *draw_input_bar(int *content_y, int *content_x, int *content_w) {
   return ibox;
 }
 
+static WINDOW *draw_labeled_input_bar(const char *label, int y, int *content_y,
+                                      int *content_x, int *content_w) {
+  int w = getmaxx(stdscr);
+
+  int bar_h = 3;
+  int bar_w = 50;
+  int bar_wb = 52;
+
+  int x = (w - bar_w) / 2;
+  int xb = (w - bar_wb) / 2;
+
+  WINDOW *ibox = newwin(bar_h, bar_w, y, x);
+  WINDOW *ibox_bars = newwin(bar_h, bar_wb, y, xb);
+  wbkgd(ibox, COLOR_PAIR(1));
+  wbkgd(ibox_bars, COLOR_PAIR(2));
+  werase(ibox);
+
+  // Draw vertical bars on left and right edges
+  cchar_t vbar;
+  setcchar(&vbar, L"┃", 0, 0, NULL);
+  for (int i = 0; i < bar_h; i++) {
+    mvwadd_wch(ibox_bars, i, 0, &vbar);
+    mvwadd_wch(ibox_bars, i, bar_wb - 1, &vbar);
+  }
+
+  // Label and prompt
+  wattron(ibox, COLOR_PAIR(6) | A_DIM);
+  char prompt[256];
+  snprintf(prompt, sizeof(prompt), "%s: ", label);
+  mvwaddstr(ibox, 1, 1, prompt);
+  wattroff(ibox, COLOR_PAIR(6) | A_DIM);
+
+  // Content area geometry for caller
+  // Add one space after the colon for cursor positioning
+  int label_len = (int)strlen(prompt) + 1;
+  int inner_x = label_len;
+  int inner_w = bar_w - inner_x - 2; // leave right padding
+  if (inner_w < 1)
+    inner_w = 1;
+  if (content_y)
+    *content_y = y + 1;
+  if (content_x)
+    *content_x = x + inner_x;
+  if (content_w)
+    *content_w = inner_w;
+
+  wrefresh(ibox_bars);
+  wrefresh(ibox);
+
+  refresh();
+
+  return ibox;
+}
+
 static void render_input(WINDOW *ibox, int content_y, int content_x,
                          int content_w, const char *buf, int cursor_pos) {
   if (!ibox)
@@ -304,6 +370,16 @@ static void draw_status_bar(const char *left, const char *right) {
   refresh();
 }
 
+// Helper function to draw guide text centered at bottom of content area
+static void draw_content_guide(int content_bottom_y, const char *guide_text) {
+  int w = getmaxx(stdscr);
+  int guide_x = (w - (int)strlen(guide_text)) / 2;
+  wattron(stdscr, COLOR_PAIR(2));
+  mvaddstr(content_bottom_y, guide_x, guide_text);
+  wattroff(stdscr, COLOR_PAIR(2));
+  refresh();
+}
+
 void introduction_page(void) {
   initscr();
   cbreak();
@@ -341,6 +417,8 @@ void introduction_page(void) {
     init_pair(7, BLACK, BLUE);
     init_pair(8, COLOR_WHITE, GRAY_3);
     init_pair(9, COLOR_WHITE, GRAY_4);
+    // Extra pairs for dialogs on dark gray background
+    init_pair(10, ORANGE, DARK_GRAY);
   }
 
   wbkgd(stdscr, COLOR_PAIR(5));
@@ -360,7 +438,6 @@ void introduction_page(void) {
        █  █ ▄▀▀▀ ▄▀▀▀
        █░░█ █░░░ █░░░
         ▀▀▀ ▀▀▀▀ ▀▀▀▀
-                               v0.1.10
   )";
 
   // const char *input_bar = R"(
@@ -443,14 +520,15 @@ void introduction_page(void) {
   // Draw middle input bar and bottom status bar
   int input_y = y_input, input_x = 0, input_w = 0;
   WINDOW *input_bar = draw_input_bar(&input_y, &input_x, &input_w);
-  draw_status_bar(" Success  v0.1.10 ", " Made with love<3 ");
+  draw_status_bar(" Success v0.1.10 ", " Made with love<3 ");
 
   char input_buf[512] = {0};
   int cursor_pos = 0;
   render_input(input_bar, input_y, input_x, input_w, input_buf, cursor_pos);
 
   int ch;
-  while ((ch = getch()) != 'q') {
+  int should_exit = 0;
+  while (!should_exit && (ch = getch()) != ERR) {
     if (ch == KEY_RESIZE) {
       resize_term(0, 0);
       clear();
@@ -491,10 +569,53 @@ void introduction_page(void) {
       input_x = 0;
       input_w = 0;
       input_bar = draw_input_bar(&input_y, &input_x, &input_w);
-      draw_status_bar(" Success  v0.1.10 ", " Made with love<3 ");
+      draw_status_bar(" Success v0.1.10 ", " Made with love<3 ");
       render_input(input_bar, input_y, input_x, input_w, input_buf, cursor_pos);
     } else if (ch == 10 || ch == KEY_ENTER) {
-      // Submit (no-op for now)
+      // Process commands when Enter is pressed
+      if (cursor_pos > 0 && strlen(input_buf) > 0) {
+        // Trim whitespace from input
+        char *trimmed = input_buf;
+        while (*trimmed == ' ' || *trimmed == '\t')
+          trimmed++;
+
+        if (strlen(trimmed) > 0) {
+          char cmd = trimmed[0];
+          if (cmd == 'l' || cmd == 's' || cmd == 'x') {
+            // Handle commands: 'l' = login, 's' = signup, 'x' = exit
+            if (cmd == 'x') {
+              should_exit = 1; // Exit
+              break;
+            } else if (cmd == 'l') {
+              // Login - call login page
+              clear();
+              refresh();
+              endwin();
+              login_page();
+              // After login page exits, return to introduction page
+              introduction_page();
+              should_exit = 1; // Exit after returning from login
+              break;
+            } else if (cmd == 's') {
+              // Signup - call signup page
+              clear();
+              refresh();
+              endwin();
+              signup_page();
+              // After signup page exits, return to introduction page
+              introduction_page();
+              should_exit = 1; // Exit after returning from signup
+              break;
+            }
+          }
+        }
+
+        // Clear input buffer after processing
+        cursor_pos = 0;
+        input_buf[0] = '\0';
+        render_input(input_bar, input_y, input_x, input_w, input_buf,
+                     cursor_pos);
+      }
     } else if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {
       if (cursor_pos > 0) {
         cursor_pos--;
@@ -509,6 +630,1199 @@ void introduction_page(void) {
         render_input(input_bar, input_y, input_x, input_w, input_buf,
                      cursor_pos);
       }
+    }
+  }
+
+  clear();
+  refresh();
+  endwin();
+}
+
+static void draw_user_type_selection(WINDOW *win, int selected_option) {
+  werase(win);
+  wattron(win, COLOR_PAIR(3));
+  mvwaddstr(win, 1, 5, "Account Type:");
+  wattroff(win, COLOR_PAIR(3));
+
+  // Student option
+  if (selected_option == 0) {
+    wattron(win, COLOR_PAIR(4));
+    mvwaddstr(win, 1, 25, "[Student]");
+    wattroff(win, COLOR_PAIR(4));
+    wattron(win, COLOR_PAIR(2));
+    mvwaddstr(win, 1, 38, "Teacher");
+    wattroff(win, COLOR_PAIR(2));
+  } else {
+    wattron(win, COLOR_PAIR(2));
+    mvwaddstr(win, 1, 26, "Student");
+    wattroff(win, COLOR_PAIR(2));
+    wattron(win, COLOR_PAIR(4));
+    mvwaddstr(win, 1, 37, "[Teacher]");
+    wattroff(win, COLOR_PAIR(4));
+  }
+  wrefresh(win);
+}
+
+// Function to save user data to SQLite database
+static int save_user_to_db(const char *username, const char *password,
+                           const char *userinfo) {
+  sqlite3 *db;
+  int rc;
+  char *err_msg = 0;
+
+  // Ensure db directory exists (ignore error if it already exists)
+  mkdir("db", 0755);
+
+  // Open database connection (creates file if it doesn't exist)
+  rc = sqlite3_open("db/users.db", &db);
+  if (rc != SQLITE_OK) {
+    // Database file doesn't exist or can't be created
+    return rc;
+  }
+
+  // Create users table if it doesn't exist
+  const char *create_table_sql = "CREATE TABLE IF NOT EXISTS users ("
+                                 "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                                 "username TEXT NOT NULL UNIQUE,"
+                                 "password TEXT NOT NULL,"
+                                 "userinfo TEXT NOT NULL,"
+                                 "created_at DATETIME DEFAULT CURRENT_TIMESTAMP"
+                                 ");";
+
+  rc = sqlite3_exec(db, create_table_sql, 0, 0, &err_msg);
+  if (rc != SQLITE_OK) {
+    sqlite3_free(err_msg);
+    sqlite3_close(db);
+    return rc;
+  }
+
+  // Insert user data using parameterized query
+  sqlite3_stmt *stmt;
+  const char *insert_sql =
+      "INSERT INTO users (username, password, userinfo) VALUES (?, ?, ?);";
+
+  rc = sqlite3_prepare_v2(db, insert_sql, -1, &stmt, NULL);
+  if (rc != SQLITE_OK) {
+    sqlite3_close(db);
+    return rc;
+  }
+
+  // Bind parameters (SQLITE_TRANSIENT makes SQLite copy the strings)
+  sqlite3_bind_text(stmt, 1, username, -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, password, -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 3, userinfo, -1, SQLITE_TRANSIENT);
+
+  // Execute the statement
+  rc = sqlite3_step(stmt);
+  if (rc != SQLITE_DONE) {
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return rc;
+  }
+
+  // Finalize the statement
+  sqlite3_finalize(stmt);
+
+  // Close database connection
+  sqlite3_close(db);
+  return SQLITE_OK;
+}
+
+// Function to check user credentials and return userinfo
+// Returns 1 if user found and credentials match, 0 if not found or wrong
+// password If found, userinfo is copied into the provided buffer (must be at
+// least 16 bytes)
+static int check_user_credentials(const char *username, const char *password,
+                                  char *userinfo) {
+  sqlite3 *db;
+  int rc;
+  sqlite3_stmt *stmt;
+
+  // Open database connection
+  rc = sqlite3_open("db/users.db", &db);
+  if (rc != SQLITE_OK) {
+    return 0; // Database doesn't exist or can't be opened
+  }
+
+  // Query for user with matching username and password
+  const char *query_sql =
+      "SELECT userinfo FROM users WHERE username = ? AND password = ?;";
+
+  rc = sqlite3_prepare_v2(db, query_sql, -1, &stmt, NULL);
+  if (rc != SQLITE_OK) {
+    sqlite3_close(db);
+    return 0;
+  }
+
+  // Bind parameters
+  sqlite3_bind_text(stmt, 1, username, -1, SQLITE_TRANSIENT);
+  sqlite3_bind_text(stmt, 2, password, -1, SQLITE_TRANSIENT);
+
+  // Execute the query
+  rc = sqlite3_step(stmt);
+  if (rc == SQLITE_ROW) {
+    // User found - get userinfo
+    const unsigned char *userinfo_val = sqlite3_column_text(stmt, 0);
+    if (userinfo_val && userinfo) {
+      strncpy(userinfo, (const char *)userinfo_val, 15);
+      userinfo[15] = '\0';
+    }
+    sqlite3_finalize(stmt);
+    sqlite3_close(db);
+    return 1; // User found
+  }
+
+  // User not found or wrong password
+  sqlite3_finalize(stmt);
+  sqlite3_close(db);
+  return 0;
+}
+
+void signup_page(void) {
+  initscr();
+  cbreak();
+  noecho();
+  keypad(stdscr, TRUE);
+  curs_set(0);
+
+  start_color();
+  // Use same color scheme as introduction page
+  if (can_change_color() && COLORS > 16) {
+    short DARK_GRAY = 16;
+    short GRAY_2 = 17;
+    short FOREGROUND = 18;
+    short ORANGE = 19;
+    short BLACK = 20;
+    short BLUE = 21;
+    short GRAY_3 = 22;
+    short GRAY_4 = 23;
+
+    init_color(DARK_GRAY, RGB_TO_NCURSES(30, 30, 30));
+    init_color(GRAY_2, RGB_TO_NCURSES(128, 128, 128));
+    init_color(FOREGROUND, RGB_TO_NCURSES(238, 238, 238));
+    init_color(ORANGE, RGB_TO_NCURSES(243, 173, 128));
+    init_color(BLACK, RGB_TO_NCURSES(10, 10, 10));
+    init_color(BLUE, RGB_TO_NCURSES(92, 156, 245));
+    init_color(GRAY_3, RGB_TO_NCURSES(53, 53, 53));
+    init_color(GRAY_4, RGB_TO_NCURSES(16, 16, 16));
+
+    init_pair(1, COLOR_WHITE, DARK_GRAY);
+    init_pair(2, GRAY_2, BLACK);
+    init_pair(3, FOREGROUND, BLACK);
+    init_pair(4, ORANGE, BLACK);
+    init_pair(5, COLOR_WHITE, BLACK);
+    init_pair(6, ORANGE, DARK_GRAY);
+    init_pair(7, BLACK, BLUE);
+    init_pair(8, COLOR_WHITE, GRAY_3);
+    init_pair(9, COLOR_WHITE, GRAY_4);
+  }
+
+  wbkgd(stdscr, COLOR_PAIR(5));
+  leaveok(stdscr, TRUE);
+
+  const char *signup_title = R"(
+  Sign Up to SUCCESS
+  )";
+
+  // Storage for user data (all as strings for SQLite)
+  char username[256] = {0};
+  char password[256] = {0};
+  char userinfo[16] = {0}; // "teacher" or "student"
+
+  // Calculate content heights
+  int title_h = count_lines(signup_title);
+  int input_spacing = 1;
+  int input_bar_h = 3;
+  int selection_h = 3;
+  int title_to_input_spacing = 2;
+
+  // Calculate vertical positions
+  int screen_h = getmaxy(stdscr);
+  int y_title = (screen_h - (title_h + title_to_input_spacing + input_bar_h +
+                             input_spacing + input_bar_h + 1 + selection_h)) /
+                2;
+  if (y_title < 0)
+    y_title = 0;
+
+  int y_username = y_title + title_h + title_to_input_spacing - 2;
+  int y_password = y_username + input_bar_h + input_spacing;
+  int y_selection = y_password + input_bar_h + 1;
+
+  // Draw title
+  WINDOW *title_win =
+      draw_centered_win(stdscr, signup_title, y_title - 2, 0, 0);
+  draw_sub_win(title_win, signup_title, 0, 0, 3);
+
+  // Draw username input
+  int username_y = 0, username_x = 0, username_w = 0;
+  WINDOW *username_bar = draw_labeled_input_bar(
+      "Username", y_username, &username_y, &username_x, &username_w);
+  char username_buf[256] = {0};
+  int username_cursor = 0;
+
+  // Draw password input
+  int password_y = 0, password_x = 0, password_w = 0;
+  WINDOW *password_bar = draw_labeled_input_bar(
+      "Password", y_password, &password_y, &password_x, &password_w);
+  char password_buf[256] = {0};
+  int password_cursor = 0;
+
+  // Draw selection area for teacher/student (create before using)
+  int w = getmaxx(stdscr);
+  int sel_w = 50;
+  int sel_x = (w - sel_w) / 2;
+  WINDOW *selection_win = newwin(selection_h, sel_w, y_selection, sel_x);
+  wbkgd(selection_win, COLOR_PAIR(5));
+
+  int selected_option = 0; // 0 = student, 1 = teacher
+
+  // Set initial focus on username field
+  curs_set(1);
+  leaveok(username_bar, FALSE);
+  leaveok(password_bar, TRUE);
+  leaveok(selection_win, TRUE);
+  render_input(username_bar, username_y, username_x, username_w, username_buf,
+               username_cursor);
+
+  // Draw guide at bottom of content
+  int content_bottom = y_selection + selection_h + 4;
+  draw_content_guide(content_bottom,
+                     " [ESC] Back   [TAB] Next   [ENTER] Submit ");
+
+  // Draw status bar
+  draw_status_bar(" Success v0.1.10 ", " Made with love<3 ");
+
+  // Draw initial selection
+  draw_user_type_selection(selection_win, selected_option);
+
+  // Input state: 0 = username, 1 = password, 2 = selection
+  int input_state = 0;
+  int should_exit = 0;
+
+  int ch;
+  while (!should_exit && (ch = getch()) != ERR) {
+    if (ch == KEY_RESIZE) {
+      resize_term(0, 0);
+      clear();
+
+      // Recalculate screen dimensions
+      screen_h = getmaxy(stdscr);
+      w = getmaxx(stdscr);
+
+      // Recalculate positions
+      int title_to_input_spacing = 2;
+      y_title = (screen_h - (title_h + title_to_input_spacing + input_bar_h +
+                             input_spacing + input_bar_h + 1 + selection_h)) /
+                2;
+      if (y_title < 0)
+        y_title = 0;
+      y_username = y_title + title_h + title_to_input_spacing - 2;
+      y_password = y_username + input_bar_h + input_spacing;
+      y_selection = y_password + input_bar_h + 1;
+
+      // Redraw everything
+      title_win = draw_centered_win(stdscr, signup_title, y_title - 2, 0, 0);
+      draw_sub_win(title_win, signup_title, 0, 0, 3);
+
+      username_bar = draw_labeled_input_bar("Username", y_username, &username_y,
+                                            &username_x, &username_w);
+      render_input(username_bar, username_y, username_x, username_w,
+                   username_buf, username_cursor);
+
+      password_bar = draw_labeled_input_bar("Password", y_password, &password_y,
+                                            &password_x, &password_w);
+      render_input(password_bar, password_y, password_x, password_w,
+                   password_buf, password_cursor);
+
+      sel_x = (w - sel_w) / 2;
+      delwin(selection_win);
+      selection_win = newwin(selection_h, sel_w, y_selection, sel_x);
+      wbkgd(selection_win, COLOR_PAIR(5));
+      draw_user_type_selection(selection_win, selected_option);
+
+      int content_bottom = y_selection + selection_h + 4;
+      draw_content_guide(content_bottom,
+                         " [ESC] Back   [TAB] Next   [ENTER] Submit ");
+      
+      // Draw status bar
+      draw_status_bar(" Success v0.1.10 ", " Made with love<3 ");
+    } else if (ch == 27) { // ESC
+      should_exit = 1;
+      break;
+    } else if (ch == '\t' || ch == KEY_DOWN) { // TAB or DOWN
+      input_state = (input_state + 1) % 3;
+
+      // Update cursor visibility
+      if (input_state == 0) {
+        curs_set(1);
+        leaveok(username_bar, FALSE);
+        leaveok(password_bar, TRUE);
+        leaveok(selection_win, TRUE);
+        render_input(username_bar, username_y, username_x, username_w,
+                     username_buf, username_cursor);
+      } else if (input_state == 1) {
+        curs_set(1);
+        leaveok(username_bar, TRUE);
+        leaveok(password_bar, FALSE);
+        leaveok(selection_win, TRUE);
+        render_input(password_bar, password_y, password_x, password_w,
+                     password_buf, password_cursor);
+      } else {
+        curs_set(0);
+        leaveok(username_bar, TRUE);
+        leaveok(password_bar, TRUE);
+        leaveok(selection_win, FALSE);
+        draw_user_type_selection(selection_win, selected_option);
+      }
+    } else if (ch == KEY_UP) {
+      input_state = (input_state + 2) % 3; // Go back one (add 2 then mod 3)
+
+      if (input_state == 0) {
+        curs_set(1);
+        leaveok(username_bar, FALSE);
+        leaveok(password_bar, TRUE);
+        leaveok(selection_win, TRUE);
+        render_input(username_bar, username_y, username_x, username_w,
+                     username_buf, username_cursor);
+      } else if (input_state == 1) {
+        curs_set(1);
+        leaveok(username_bar, TRUE);
+        leaveok(password_bar, FALSE);
+        leaveok(selection_win, TRUE);
+        render_input(password_bar, password_y, password_x, password_w,
+                     password_buf, password_cursor);
+      } else {
+        curs_set(0);
+        leaveok(username_bar, TRUE);
+        leaveok(password_bar, TRUE);
+        leaveok(selection_win, FALSE);
+        draw_user_type_selection(selection_win, selected_option);
+      }
+    } else if (ch == 10 || ch == KEY_ENTER) {
+      if (input_state == 2) {
+        // Show confirmation dialog
+        int confirm = 1; // default to YES (0 = no, 1 = yes)
+        int confirm_should_exit = 0;
+
+        // Create confirmation dialog
+        int confirm_h = 7;
+        const char *confirm_title = "Are you sure?";
+        const char *no_label = "No";
+        const char *yes_label = "Yes";
+        int max_text_len = (int)strlen(confirm_title);
+        int no_yes_len = (int)strlen(no_label) + 6 + (int)strlen(yes_label);
+        if (no_yes_len > max_text_len)
+          max_text_len = no_yes_len;
+        int confirm_w = max_text_len + 22; // 4 padding on each side
+        int confirm_y = screen_h / 2 - confirm_h / 2;
+        int confirm_x = (w - confirm_w) / 2;
+        // WINDOW *confirm_win_border =
+        //     newwin(confirm_h + 2, confirm_w + 2, confirm_y, confirm_x);
+        WINDOW *confirm_win =
+            newwin(confirm_h, confirm_w, confirm_y, confirm_x + 1);
+        wbkgd(confirm_win, COLOR_PAIR(1));
+
+        while (!confirm_should_exit) {
+          werase(confirm_win);
+          // Draw heavy border
+          cchar_t vline, hline, ul, ur, ll, lr;
+          setcchar(&vline, L"┃", 0, 0, NULL);
+          setcchar(&hline, L"━", 0, 0, NULL);
+          setcchar(&ul, L"┏", 0, 0, NULL);
+          setcchar(&ur, L"┓", 0, 0, NULL);
+          setcchar(&ll, L"┗", 0, 0, NULL);
+          setcchar(&lr, L"┛", 0, 0, NULL);
+          wborder_set(confirm_win, &vline, &vline, &hline, &hline, &ul, &ur,
+                      &ll, &lr);
+
+          // Title using default foreground on dark background (4 padding from
+          // left)
+          // int title_x = strlen(confirm_title) - confirm_w;
+          int title_x = 11;
+          wattron(confirm_win, A_BOLD);
+          mvwaddstr(confirm_win, 2, title_x, confirm_title);
+          wattroff(confirm_win, A_BOLD);
+
+          int opts_y = confirm_h - 3;
+          const char *no_label_sel = "[No]";
+          const char *yes_label_sel = "[Yes]";
+          int spacing = 6;
+          const char *left = (confirm == 0) ? no_label_sel : no_label;
+          const char *right = (confirm == 1) ? yes_label_sel : yes_label;
+          // int total_w = (int)strlen(left) + spacing + (int)strlen(right);
+          int start_x = 10; // 4 padding from left
+
+          if (confirm == 0) {
+            // NO selected
+            wattron(confirm_win, COLOR_PAIR(6));
+            mvwaddstr(confirm_win, opts_y, start_x - 1, left);
+            wattroff(confirm_win, COLOR_PAIR(6));
+            wattron(confirm_win, COLOR_PAIR(1) | A_DIM);
+            mvwaddstr(confirm_win, opts_y,
+                      start_x + (int)strlen(left) + spacing + 1, right);
+            wattroff(confirm_win, COLOR_PAIR(1) | A_DIM);
+          } else {
+            // YES selected
+            wattron(confirm_win, COLOR_PAIR(1) | A_DIM);
+            mvwaddstr(confirm_win, opts_y, start_x, left);
+            wattroff(confirm_win, COLOR_PAIR(1) | A_DIM);
+            wattron(confirm_win, COLOR_PAIR(6));
+            mvwaddstr(confirm_win, opts_y,
+                      start_x + (int)strlen(left) + spacing + 2, right);
+            wattroff(confirm_win, COLOR_PAIR(6));
+          }
+
+          wrefresh(confirm_win);
+
+          int confirm_ch = getch();
+          if (confirm_ch == KEY_LEFT || confirm_ch == KEY_RIGHT) {
+            confirm = 1 - confirm;
+          } else if (confirm_ch == 10 || confirm_ch == KEY_ENTER) {
+            if (confirm == 1) {
+              // Yes - store data and proceed
+              strncpy(username, username_buf, sizeof(username) - 1);
+              username[sizeof(username) - 1] = '\0';
+
+              strncpy(password, password_buf, sizeof(password) - 1);
+              password[sizeof(password) - 1] = '\0';
+
+              strncpy(userinfo, selected_option == 0 ? "student" : "teacher",
+                      sizeof(userinfo) - 1);
+              userinfo[sizeof(userinfo) - 1] = '\0';
+
+              // Store in SQLite database
+              int db_result = save_user_to_db(username, password, userinfo);
+              if (db_result != SQLITE_OK) {
+                // Database save failed - could show error message here
+                // For now, continue anyway
+              }
+
+              delwin(confirm_win);
+              clear();
+              refresh();
+              endwin();
+
+              // Redirect to appropriate page based on account type
+              if (strcmp(userinfo, "student") == 0) {
+                student_page();
+              } else if (strcmp(userinfo, "teacher") == 0) {
+                teacher_page();
+              } else {
+                // Fallback to success menu if userinfo is unexpected
+                success_menu_page();
+              }
+              should_exit = 1;
+              break;
+            } else {
+              // No - clear all data and restart
+              memset(username_buf, 0, sizeof(username_buf));
+              memset(password_buf, 0, sizeof(password_buf));
+              username_cursor = 0;
+              password_cursor = 0;
+              selected_option = 0;
+              input_state = 0;
+
+              delwin(confirm_win);
+
+              // Redraw everything
+              clear();
+              title_win =
+                  draw_centered_win(stdscr, signup_title, y_title - 2, 0, 0);
+              draw_sub_win(title_win, signup_title, 0, 0, 3);
+
+              delwin(username_bar);
+              delwin(password_bar);
+              username_bar =
+                  draw_labeled_input_bar("Username", y_username, &username_y,
+                                         &username_x, &username_w);
+              password_bar =
+                  draw_labeled_input_bar("Password", y_password, &password_y,
+                                         &password_x, &password_w);
+
+              curs_set(1);
+              leaveok(username_bar, FALSE);
+              leaveok(password_bar, TRUE);
+              leaveok(selection_win, TRUE);
+              render_input(username_bar, username_y, username_x, username_w,
+                           username_buf, username_cursor);
+
+              draw_user_type_selection(selection_win, selected_option);
+              int content_bottom = y_selection + selection_h + 4;
+              draw_content_guide(content_bottom,
+                                 " [ESC] Back   [TAB] Next   [ENTER] Submit ");
+              
+              // Draw status bar
+              draw_status_bar(" Success v0.1.10 ", " Made with love<3 ");
+
+              confirm_should_exit = 1;
+            }
+          } else if (confirm_ch == 27) {
+            // ESC - cancel confirmation, stay on selection
+            delwin(confirm_win);
+            confirm_should_exit = 1;
+          }
+        }
+      } else if (input_state == 0) {
+        // Username field - move to password
+        input_state = 1;
+        curs_set(1);
+        leaveok(username_bar, TRUE);
+        leaveok(password_bar, FALSE);
+        leaveok(selection_win, TRUE);
+        render_input(password_bar, password_y, password_x, password_w,
+                     password_buf, password_cursor);
+      } else if (input_state == 1) {
+        // Password field - move to selection
+        input_state = 2;
+        curs_set(0);
+        leaveok(username_bar, TRUE);
+        leaveok(password_bar, TRUE);
+        leaveok(selection_win, FALSE);
+        draw_user_type_selection(selection_win, selected_option);
+      }
+    } else if (input_state == 2) {
+      // Selection mode - handle left/right arrows
+      if (ch == KEY_LEFT || ch == KEY_RIGHT) {
+        selected_option = 1 - selected_option;
+        draw_user_type_selection(selection_win, selected_option);
+      }
+    } else if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {
+      // Handle backspace
+      if (input_state == 0) {
+        if (username_cursor > 0) {
+          username_cursor--;
+          username_buf[username_cursor] = '\0';
+          render_input(username_bar, username_y, username_x, username_w,
+                       username_buf, username_cursor);
+        }
+      } else if (input_state == 1) {
+        if (password_cursor > 0) {
+          password_cursor--;
+          password_buf[password_cursor] = '\0';
+          render_input(password_bar, password_y, password_x, password_w,
+                       password_buf, password_cursor);
+        }
+      }
+    } else if (ch >= 32 && ch <= 126) {
+      // Handle printable characters
+      if (input_state == 0) {
+        if (username_cursor < (int)sizeof(username_buf) - 1) {
+          username_buf[username_cursor++] = (char)ch;
+          username_buf[username_cursor] = '\0';
+          render_input(username_bar, username_y, username_x, username_w,
+                       username_buf, username_cursor);
+        }
+      } else if (input_state == 1) {
+        if (password_cursor < (int)sizeof(password_buf) - 1) {
+          password_buf[password_cursor++] = (char)ch;
+          password_buf[password_cursor] = '\0';
+          // Show asterisks for password
+          char display_buf[256];
+          memset(display_buf, '*', password_cursor);
+          display_buf[password_cursor] = '\0';
+          render_input(password_bar, password_y, password_x, password_w,
+                       display_buf, password_cursor);
+        }
+      }
+    }
+  }
+
+  // Clean up windows
+  delwin(selection_win);
+
+  clear();
+  refresh();
+  endwin();
+}
+
+void success_menu_page(void) {
+  initscr();
+  cbreak();
+  noecho();
+  keypad(stdscr, TRUE);
+  curs_set(0);
+
+  start_color();
+  // Use same color scheme as introduction page
+  if (can_change_color() && COLORS > 16) {
+    short DARK_GRAY = 16;
+    short GRAY_2 = 17;
+    short FOREGROUND = 18;
+    short ORANGE = 19;
+    short BLACK = 20;
+    short BLUE = 21;
+    short GRAY_3 = 22;
+    short GRAY_4 = 23;
+
+    init_color(DARK_GRAY, RGB_TO_NCURSES(30, 30, 30));
+    init_color(GRAY_2, RGB_TO_NCURSES(128, 128, 128));
+    init_color(FOREGROUND, RGB_TO_NCURSES(238, 238, 238));
+    init_color(ORANGE, RGB_TO_NCURSES(243, 173, 128));
+    init_color(BLACK, RGB_TO_NCURSES(10, 10, 10));
+    init_color(BLUE, RGB_TO_NCURSES(92, 156, 245));
+    init_color(GRAY_3, RGB_TO_NCURSES(53, 53, 53));
+    init_color(GRAY_4, RGB_TO_NCURSES(16, 16, 16));
+
+    init_pair(1, COLOR_WHITE, DARK_GRAY);
+    init_pair(2, GRAY_2, BLACK);
+    init_pair(3, FOREGROUND, BLACK);
+    init_pair(4, ORANGE, BLACK);
+    init_pair(5, COLOR_WHITE, BLACK);
+    init_pair(6, ORANGE, DARK_GRAY);
+    init_pair(7, BLACK, BLUE);
+    init_pair(8, COLOR_WHITE, GRAY_3);
+    init_pair(9, COLOR_WHITE, GRAY_4);
+  }
+
+  wbkgd(stdscr, COLOR_PAIR(5));
+  leaveok(stdscr, TRUE);
+
+  const char *welcome_text = R"(
+  Welcome to SUCCESS!
+  
+  Account created successfully.
+  )";
+
+  // Calculate content heights
+  int welcome_h = count_lines(welcome_text);
+  int screen_h = getmaxy(stdscr);
+  int y_welcome = (screen_h - welcome_h) / 2;
+  if (y_welcome < 0)
+    y_welcome = 0;
+
+  // Draw welcome message
+  WINDOW *welcome_win =
+      draw_centered_win(stdscr, welcome_text, y_welcome, 0, 0);
+  draw_sub_win(welcome_win, welcome_text, 0, 0, 4);
+
+  // Draw status bar
+  draw_status_bar(" Success Menu ", " [ESC] Exit ");
+
+  // Wait for ESC to exit
+  int ch;
+  while ((ch = getch()) != 27 && ch != KEY_RESIZE) {
+    if (ch == KEY_RESIZE) {
+      resize_term(0, 0);
+      clear();
+
+      screen_h = getmaxy(stdscr);
+      y_welcome = (screen_h - welcome_h) / 2;
+      if (y_welcome < 0)
+        y_welcome = 0;
+
+      welcome_win = draw_centered_win(stdscr, welcome_text, y_welcome, 0, 0);
+      draw_sub_win(welcome_win, welcome_text, 0, 0, 4);
+      draw_status_bar(" Success Menu ", " [ESC] Exit ");
+    }
+  }
+
+  clear();
+  refresh();
+  endwin();
+}
+
+// Helper function to show error popup and wait for Enter
+static void show_error_popup(const char *message) {
+  int h = getmaxy(stdscr);
+  int w = getmaxx(stdscr);
+
+  int popup_h = 7; // Increased height for bottom padding
+  int message_len = (int)strlen(message);
+  int hint_len = (int)strlen("Press Enter to continue");
+  int max_text_len = message_len > hint_len ? message_len : hint_len;
+  int popup_w = max_text_len + 16; // 4 padding on each side
+  int popup_y = h / 2 - popup_h / 2;
+  int popup_x = (w - popup_w) / 2;
+
+  WINDOW *popup_win = newwin(popup_h, popup_w, popup_y, popup_x);
+  wbkgd(popup_win, COLOR_PAIR(1));
+
+  // Draw border
+  cchar_t vline, hline, ul, ur, ll, lr;
+  setcchar(&vline, L"┃", 0, 0, NULL);
+  setcchar(&hline, L"━", 0, 0, NULL);
+  setcchar(&ul, L"┏", 0, 0, NULL);
+  setcchar(&ur, L"┓", 0, 0, NULL);
+  setcchar(&ll, L"┗", 0, 0, NULL);
+  setcchar(&lr, L"┛", 0, 0, NULL);
+  wborder_set(popup_win, &vline, &vline, &hline, &hline, &ul, &ur, &ll, &lr);
+
+  // Show message (4 padding from left)
+  int msg_y = popup_h / 2 - 1;
+  int msg_x = 4;
+  wattron(popup_win, A_BOLD);
+  mvwaddstr(popup_win, msg_y, msg_x + 8, message);
+  wattroff(popup_win, A_BOLD);
+
+  // Show "Press Enter" hint (4 padding from left, 1 padding from bottom)
+  const char *hint = "Press Enter to continue";
+  int hint_x = 4;
+  wattron(popup_win, COLOR_PAIR(6));
+  mvwaddstr(popup_win, popup_h - 3, hint_x + 4, hint);
+  wattroff(popup_win, COLOR_PAIR(6));
+
+  wrefresh(popup_win);
+
+  // Wait for Enter
+  int ch;
+  while ((ch = getch()) != 10 && ch != KEY_ENTER) {
+    if (ch == KEY_RESIZE) {
+      resize_term(0, 0);
+      clear();
+      refresh();
+      // Redraw popup
+      h = getmaxy(stdscr);
+      w = getmaxx(stdscr);
+      int message_len = (int)strlen(message);
+      int hint_len = (int)strlen("Press Enter to continue");
+      int max_text_len = message_len > hint_len ? message_len : hint_len;
+      popup_w = max_text_len + 8; // 4 padding on each side
+      popup_y = h / 2 - popup_h / 2;
+      popup_x = (w - popup_w) / 2;
+      delwin(popup_win);
+      popup_win = newwin(popup_h, popup_w, popup_y, popup_x);
+      wbkgd(popup_win, COLOR_PAIR(1));
+      wborder_set(popup_win, &vline, &vline, &hline, &hline, &ul, &ur, &ll,
+                  &lr);
+      wattron(popup_win, A_BOLD);
+      mvwaddstr(popup_win, msg_y, msg_x, message);
+      wattroff(popup_win, A_BOLD);
+      wattron(popup_win, COLOR_PAIR(6));
+      mvwaddstr(popup_win, popup_h - 2, hint_x, hint);
+      wattroff(popup_win, COLOR_PAIR(6));
+      wrefresh(popup_win);
+    }
+  }
+
+  delwin(popup_win);
+}
+
+void login_page(void) {
+  initscr();
+  cbreak();
+  noecho();
+  keypad(stdscr, TRUE);
+  curs_set(0);
+
+  start_color();
+  // Use same color scheme as introduction page
+  if (can_change_color() && COLORS > 16) {
+    short DARK_GRAY = 16;
+    short GRAY_2 = 17;
+    short FOREGROUND = 18;
+    short ORANGE = 19;
+    short BLACK = 20;
+    short BLUE = 21;
+    short GRAY_3 = 22;
+    short GRAY_4 = 23;
+
+    init_color(DARK_GRAY, RGB_TO_NCURSES(30, 30, 30));
+    init_color(GRAY_2, RGB_TO_NCURSES(128, 128, 128));
+    init_color(FOREGROUND, RGB_TO_NCURSES(238, 238, 238));
+    init_color(ORANGE, RGB_TO_NCURSES(243, 173, 128));
+    init_color(BLACK, RGB_TO_NCURSES(10, 10, 10));
+    init_color(BLUE, RGB_TO_NCURSES(92, 156, 245));
+    init_color(GRAY_3, RGB_TO_NCURSES(53, 53, 53));
+    init_color(GRAY_4, RGB_TO_NCURSES(16, 16, 16));
+
+    init_pair(1, COLOR_WHITE, DARK_GRAY);
+    init_pair(2, GRAY_2, BLACK);
+    init_pair(3, FOREGROUND, BLACK);
+    init_pair(4, ORANGE, BLACK);
+    init_pair(5, COLOR_WHITE, BLACK);
+    init_pair(6, ORANGE, DARK_GRAY);
+    init_pair(7, BLACK, BLUE);
+    init_pair(8, COLOR_WHITE, GRAY_3);
+    init_pair(9, COLOR_WHITE, GRAY_4);
+  }
+
+  wbkgd(stdscr, COLOR_PAIR(5));
+  leaveok(stdscr, TRUE);
+
+  const char *login_title = R"(
+  Login to SUCCESS
+  )";
+
+  // Calculate content heights
+  int title_h = count_lines(login_title);
+  int input_spacing = 1;
+  int input_bar_h = 3;
+  int title_to_input_spacing = 2;
+
+  // Calculate vertical positions
+  int screen_h = getmaxy(stdscr);
+  int y_title = (screen_h - (title_h + title_to_input_spacing + input_bar_h +
+                             input_spacing + input_bar_h)) /
+                2;
+  if (y_title < 0)
+    y_title = 0;
+
+  int y_username = y_title + title_h + title_to_input_spacing - 2;
+  int y_password = y_username + input_bar_h + input_spacing;
+
+  // Draw title
+  WINDOW *title_win = draw_centered_win(stdscr, login_title, y_title - 2, 0, 0);
+  draw_sub_win(title_win, login_title, 0, 0, 3);
+
+  // Draw username input
+  int username_y = 0, username_x = 0, username_w = 0;
+  WINDOW *username_bar = draw_labeled_input_bar(
+      "Username", y_username, &username_y, &username_x, &username_w);
+  char username_buf[256] = {0};
+  int username_cursor = 0;
+
+  // Draw password input
+  int password_y = 0, password_x = 0, password_w = 0;
+  WINDOW *password_bar = draw_labeled_input_bar(
+      "Password", y_password, &password_y, &password_x, &password_w);
+  char password_buf[256] = {0};
+  int password_cursor = 0;
+
+  // Set initial focus on username field
+  curs_set(1);
+  leaveok(username_bar, FALSE);
+  leaveok(password_bar, TRUE);
+  render_input(username_bar, username_y, username_x, username_w, username_buf,
+               username_cursor);
+
+  // Draw guide at bottom of content
+  int content_bottom = y_password + input_bar_h + 6;
+  draw_content_guide(content_bottom,
+                     " [ESC] Back   [TAB] Next   [ENTER] Submit ");
+
+  // Draw status bar
+  draw_status_bar(" Success v0.1.10 ", " Made with love<3 ");
+
+  // Input state: 0 = username, 1 = password
+  int input_state = 0;
+  int should_exit = 0;
+
+  int ch;
+  while (!should_exit && (ch = getch()) != ERR) {
+    if (ch == KEY_RESIZE) {
+      resize_term(0, 0);
+      clear();
+
+      // Recalculate screen dimensions
+      screen_h = getmaxy(stdscr);
+      // int w = getmaxx(stdscr);
+
+      // Recalculate positions
+      int title_to_input_spacing = 2;
+      y_title = (screen_h - (title_h + title_to_input_spacing + input_bar_h +
+                             input_spacing + input_bar_h)) /
+                2;
+      if (y_title < 0)
+        y_title = 0;
+      y_username = y_title + title_h + title_to_input_spacing - 2;
+      y_password = y_username + input_bar_h + input_spacing;
+
+      // Redraw everything
+      title_win = draw_centered_win(stdscr, login_title, y_title - 2, 0, 0);
+      draw_sub_win(title_win, login_title, 0, 0, 3);
+
+      username_bar = draw_labeled_input_bar("Username", y_username, &username_y,
+                                            &username_x, &username_w);
+      render_input(username_bar, username_y, username_x, username_w,
+                   username_buf, username_cursor);
+
+      password_bar = draw_labeled_input_bar("Password", y_password, &password_y,
+                                            &password_x, &password_w);
+      render_input(password_bar, password_y, password_x, password_w,
+                   password_buf, password_cursor);
+
+      int content_bottom = y_password + input_bar_h + 4;
+      draw_content_guide(content_bottom,
+                         " [ESC] Back   [TAB] Next   [ENTER] Submit ");
+      
+      // Draw status bar
+      draw_status_bar(" Success v0.1.10 ", " Made with love<3 ");
+    } else if (ch == 27) { // ESC
+      should_exit = 1;
+      break;
+    } else if (ch == '\t' || ch == KEY_DOWN) { // TAB or DOWN
+      input_state = (input_state + 1) % 2;
+
+      // Update cursor visibility
+      if (input_state == 0) {
+        curs_set(1);
+        leaveok(username_bar, FALSE);
+        leaveok(password_bar, TRUE);
+        render_input(username_bar, username_y, username_x, username_w,
+                     username_buf, username_cursor);
+      } else {
+        curs_set(1);
+        leaveok(username_bar, TRUE);
+        leaveok(password_bar, FALSE);
+        render_input(password_bar, password_y, password_x, password_w,
+                     password_buf, password_cursor);
+      }
+    } else if (ch == KEY_UP) {
+      input_state = (input_state + 1) % 2; // Go back one
+
+      if (input_state == 0) {
+        curs_set(1);
+        leaveok(username_bar, FALSE);
+        leaveok(password_bar, TRUE);
+        render_input(username_bar, username_y, username_x, username_w,
+                     username_buf, username_cursor);
+      } else {
+        curs_set(1);
+        leaveok(username_bar, TRUE);
+        leaveok(password_bar, FALSE);
+        render_input(password_bar, password_y, password_x, password_w,
+                     password_buf, password_cursor);
+      }
+    } else if (ch == 10 || ch == KEY_ENTER) {
+      // Submit login
+      if (strlen(username_buf) > 0 && strlen(password_buf) > 0) {
+        char userinfo[16] = {0};
+        int found =
+            check_user_credentials(username_buf, password_buf, userinfo);
+
+        if (!found) {
+          // User not found - show popup
+          show_error_popup("User not found");
+          // Return to introduction page
+          clear();
+          refresh();
+          endwin();
+          introduction_page();
+          should_exit = 1;
+          break;
+        } else {
+          // User found - navigate to appropriate page
+          clear();
+          refresh();
+          endwin();
+
+          if (strcmp(userinfo, "student") == 0) {
+            student_page();
+          } else if (strcmp(userinfo, "teacher") == 0) {
+            teacher_page();
+          } else {
+            // Unexpected userinfo value - show error and return
+            show_error_popup("Invalid user type");
+            clear();
+            refresh();
+            endwin();
+            introduction_page();
+          }
+          should_exit = 1;
+          break;
+        }
+      } else if (input_state == 0) {
+        // Username field - move to password
+        input_state = 1;
+        curs_set(1);
+        leaveok(username_bar, TRUE);
+        leaveok(password_bar, FALSE);
+        render_input(password_bar, password_y, password_x, password_w,
+                     password_buf, password_cursor);
+      }
+    } else if (ch == KEY_BACKSPACE || ch == 127 || ch == 8) {
+      // Handle backspace
+      if (input_state == 0) {
+        if (username_cursor > 0) {
+          username_cursor--;
+          username_buf[username_cursor] = '\0';
+          render_input(username_bar, username_y, username_x, username_w,
+                       username_buf, username_cursor);
+        }
+      } else {
+        if (password_cursor > 0) {
+          password_cursor--;
+          password_buf[password_cursor] = '\0';
+          char display_buf[256];
+          memset(display_buf, '*', password_cursor);
+          display_buf[password_cursor] = '\0';
+          render_input(password_bar, password_y, password_x, password_w,
+                       display_buf, password_cursor);
+        }
+      }
+    } else if (ch >= 32 && ch <= 126) {
+      // Handle printable characters
+      if (input_state == 0) {
+        if (username_cursor < (int)sizeof(username_buf) - 1) {
+          username_buf[username_cursor++] = (char)ch;
+          username_buf[username_cursor] = '\0';
+          render_input(username_bar, username_y, username_x, username_w,
+                       username_buf, username_cursor);
+        }
+      } else {
+        if (password_cursor < (int)sizeof(password_buf) - 1) {
+          password_buf[password_cursor++] = (char)ch;
+          password_buf[password_cursor] = '\0';
+          // Show asterisks for password
+          char display_buf[256];
+          memset(display_buf, '*', password_cursor);
+          display_buf[password_cursor] = '\0';
+          render_input(password_bar, password_y, password_x, password_w,
+                       display_buf, password_cursor);
+        }
+      }
+    }
+  }
+
+  clear();
+  refresh();
+  endwin();
+}
+
+void student_page(void) {
+  initscr();
+  cbreak();
+  noecho();
+  keypad(stdscr, TRUE);
+  curs_set(0);
+
+  start_color();
+  if (can_change_color() && COLORS > 16) {
+    short DARK_GRAY = 16;
+    short GRAY_2 = 17;
+    short FOREGROUND = 18;
+    short ORANGE = 19;
+    short BLACK = 20;
+    short BLUE = 21;
+    short GRAY_3 = 22;
+    short GRAY_4 = 23;
+
+    init_color(DARK_GRAY, RGB_TO_NCURSES(30, 30, 30));
+    init_color(GRAY_2, RGB_TO_NCURSES(128, 128, 128));
+    init_color(FOREGROUND, RGB_TO_NCURSES(238, 238, 238));
+    init_color(ORANGE, RGB_TO_NCURSES(243, 173, 128));
+    init_color(BLACK, RGB_TO_NCURSES(10, 10, 10));
+    init_color(BLUE, RGB_TO_NCURSES(92, 156, 245));
+    init_color(GRAY_3, RGB_TO_NCURSES(53, 53, 53));
+    init_color(GRAY_4, RGB_TO_NCURSES(16, 16, 16));
+
+    init_pair(1, COLOR_WHITE, DARK_GRAY);
+    init_pair(2, GRAY_2, BLACK);
+    init_pair(3, FOREGROUND, BLACK);
+    init_pair(4, ORANGE, BLACK);
+    init_pair(5, COLOR_WHITE, BLACK);
+    init_pair(6, ORANGE, DARK_GRAY);
+    init_pair(7, BLACK, BLUE);
+    init_pair(8, COLOR_WHITE, GRAY_3);
+    init_pair(9, COLOR_WHITE, GRAY_4);
+  }
+
+  wbkgd(stdscr, COLOR_PAIR(5));
+  leaveok(stdscr, TRUE);
+
+  const char *welcome_text = R"(
+  Welcome Student!
+  
+  Student dashboard coming soon...
+  )";
+
+  int welcome_h = count_lines(welcome_text);
+  int screen_h = getmaxy(stdscr);
+  int y_welcome = (screen_h - welcome_h) / 2;
+  if (y_welcome < 0)
+    y_welcome = 0;
+
+  WINDOW *welcome_win =
+      draw_centered_win(stdscr, welcome_text, y_welcome, 0, 0);
+  draw_sub_win(welcome_win, welcome_text, 0, 0, 4);
+
+  draw_status_bar(" Student Dashboard ", " [ESC] Exit ");
+
+  int ch;
+  while ((ch = getch()) != 27 && ch != KEY_RESIZE) {
+    if (ch == KEY_RESIZE) {
+      resize_term(0, 0);
+      clear();
+
+      screen_h = getmaxy(stdscr);
+      y_welcome = (screen_h - welcome_h) / 2;
+      if (y_welcome < 0)
+        y_welcome = 0;
+
+      welcome_win = draw_centered_win(stdscr, welcome_text, y_welcome, 0, 0);
+      draw_sub_win(welcome_win, welcome_text, 0, 0, 4);
+      draw_status_bar(" Student Dashboard ", " [ESC] Exit ");
+    }
+  }
+
+  clear();
+  refresh();
+  endwin();
+}
+
+void teacher_page(void) {
+  initscr();
+  cbreak();
+  noecho();
+  keypad(stdscr, TRUE);
+  curs_set(0);
+
+  start_color();
+  if (can_change_color() && COLORS > 16) {
+    short DARK_GRAY = 16;
+    short GRAY_2 = 17;
+    short FOREGROUND = 18;
+    short ORANGE = 19;
+    short BLACK = 20;
+    short BLUE = 21;
+    short GRAY_3 = 22;
+    short GRAY_4 = 23;
+
+    init_color(DARK_GRAY, RGB_TO_NCURSES(30, 30, 30));
+    init_color(GRAY_2, RGB_TO_NCURSES(128, 128, 128));
+    init_color(FOREGROUND, RGB_TO_NCURSES(238, 238, 238));
+    init_color(ORANGE, RGB_TO_NCURSES(243, 173, 128));
+    init_color(BLACK, RGB_TO_NCURSES(10, 10, 10));
+    init_color(BLUE, RGB_TO_NCURSES(92, 156, 245));
+    init_color(GRAY_3, RGB_TO_NCURSES(53, 53, 53));
+    init_color(GRAY_4, RGB_TO_NCURSES(16, 16, 16));
+
+    init_pair(1, COLOR_WHITE, DARK_GRAY);
+    init_pair(2, GRAY_2, BLACK);
+    init_pair(3, FOREGROUND, BLACK);
+    init_pair(4, ORANGE, BLACK);
+    init_pair(5, COLOR_WHITE, BLACK);
+    init_pair(6, ORANGE, DARK_GRAY);
+    init_pair(7, BLACK, BLUE);
+    init_pair(8, COLOR_WHITE, GRAY_3);
+    init_pair(9, COLOR_WHITE, GRAY_4);
+  }
+
+  wbkgd(stdscr, COLOR_PAIR(5));
+  leaveok(stdscr, TRUE);
+
+  const char *welcome_text = R"(
+  Welcome Teacher!
+  
+  Teacher dashboard coming soon...
+  )";
+
+  int welcome_h = count_lines(welcome_text);
+  int screen_h = getmaxy(stdscr);
+  int y_welcome = (screen_h - welcome_h) / 2;
+  if (y_welcome < 0)
+    y_welcome = 0;
+
+  WINDOW *welcome_win =
+      draw_centered_win(stdscr, welcome_text, y_welcome, 0, 0);
+  draw_sub_win(welcome_win, welcome_text, 0, 0, 4);
+
+  draw_status_bar(" Teacher Dashboard ", " [ESC] Exit ");
+
+  int ch;
+  while ((ch = getch()) != 27 && ch != KEY_RESIZE) {
+    if (ch == KEY_RESIZE) {
+      resize_term(0, 0);
+      clear();
+
+      screen_h = getmaxy(stdscr);
+      y_welcome = (screen_h - welcome_h) / 2;
+      if (y_welcome < 0)
+        y_welcome = 0;
+
+      welcome_win = draw_centered_win(stdscr, welcome_text, y_welcome, 0, 0);
+      draw_sub_win(welcome_win, welcome_text, 0, 0, 4);
+      draw_status_bar(" Teacher Dashboard ", " [ESC] Exit ");
     }
   }
 

@@ -9,7 +9,7 @@ BUILD_DIR = builds
 ifeq ($(OS),Windows_NT)
 TARGET := $(PROGRAM)
 # LIB = -lcurl -lcjson -lpthread ../lib/nfd.lib -lole32 -luuid -lpdcurses
-LIB = -lpdcursesw -lwinmm -lgdi32 -luser32
+LIB = -lpdcursesw -lwinmm -lgdi32 -luser32 -lsqlite3
 RM = del /F /Q
 RMDIR = rmdir /S /Q
 MKDIR = mkdir
