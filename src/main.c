@@ -31,7 +31,8 @@
 
 #define QUOTE(...) #__VA_ARGS__ // pre-processor to turn content into string
 
-void enableVirtualTerminal() {
+void enableVirtualTerminal()
+{
 #ifdef _WIN32
   // enable ANSI support for windows cmd
   HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -50,13 +51,15 @@ void enableVirtualTerminal() {
 #endif
 }
 
-int main(void) {
+int main(void)
+{
   // Set locale BEFORE calling any curses functions
   setlocale(LC_ALL, "en_US.UTF-8");
 
 // On Windows, try UTF-8 locale if the above fails
 #ifdef _WIN32
-  if (!setlocale(LC_ALL, "en_US.UTF-8")) {
+  if (!setlocale(LC_ALL, "en_US.UTF-8"))
+  {
     setlocale(LC_ALL, "C.UTF-8");
   }
 #endif
@@ -70,11 +73,13 @@ int main(void) {
   char *env_json = read_file("../env.json");
 
   cJSON *env = cJSON_Parse(env_json);
-  if (!env) {
+  if (!env)
+  {
     printf("no env\n");
     const char *error_ptr = cJSON_GetErrorPtr();
 
-    if (error_ptr) {
+    if (error_ptr)
+    {
       fprintf(stderr, "[ERROR] Error parsing JSON at %s\n", error_ptr);
     }
     printf("no env\n");
@@ -85,17 +90,20 @@ int main(void) {
 
   cJSON *gemini_api_key =
       cJSON_GetObjectItemCaseSensitive(env, "GEMINI_API_KEY");
-  if (!gemini_api_key->valuestring) {
+  if (!gemini_api_key->valuestring)
+  {
     fprintf(stderr, "GEMINI_API_KEY environment variable not set.\n");
   }
   cJSON *gemini_api_url =
       cJSON_GetObjectItemCaseSensitive(env, "GEMINI_API_URL");
-  if (!gemini_api_url->valuestring) {
+  if (!gemini_api_url->valuestring)
+  {
     fprintf(stderr, "GEMINI_API_URL environment variable not set.\n");
   }
   cJSON *gemini_file_url =
       cJSON_GetObjectItemCaseSensitive(env, "GEMINI_FILE_URL");
-  if (!gemini_file_url->valuestring) {
+  if (!gemini_file_url->valuestring)
+  {
     fprintf(stderr, "GEMINI_FILE_URL environment variable not set.\n");
   }
 
@@ -154,7 +162,8 @@ int main(void) {
   nfdresult_t nfd_res = NFD_CANCEL;
   nfdpathset_t pathSet = {0};
 
-  while (1) {
+  while (1)
+  {
     int total_file_num = 0;
     char **exts = NULL;
     char **file_uris = NULL;
@@ -165,16 +174,21 @@ int main(void) {
            "exit]: "
            "\033[0m");
 
-    if (fgets(userPrompt, sizeof(userPrompt), stdin) != NULL) {
+    if (fgets(userPrompt, sizeof(userPrompt), stdin) != NULL)
+    {
       userPrompt[strcspn(userPrompt, "\n")] = '\0';
 
-      if (strcmp(userPrompt, "0") == 0) {
+      if (strcmp(userPrompt, "0") == 0)
+      {
         printf("[INFO] Exited\n");
         break;
-      } else if (strcmp(userPrompt, "1") == 0) {
+      }
+      else if (strcmp(userPrompt, "1") == 0)
+      {
         nfd_res = NFD_OpenDialogMultiple("png,jpeg,jpg,pdf", NULL, &pathSet);
 
-        for (size_t i = 0; i < NFD_PathSet_GetCount(&pathSet); ++i) {
+        for (size_t i = 0; i < NFD_PathSet_GetCount(&pathSet); ++i)
+        {
           nfdchar_t *path = NFD_PathSet_GetPath(&pathSet, i);
           printf("Path %i: %s\n", (int)i, path);
         }
@@ -194,14 +208,16 @@ int main(void) {
     is_generating = true;
     pthread_create(&generate_thread, NULL, gemini_loading, NULL);
 
-    if (nfd_res == NFD_OKAY) {
+    if (nfd_res == NFD_OKAY)
+    {
       total_file_num = NFD_PathSet_GetCount(&pathSet);
 
       int capacity = 0;
 
       // printf("im here loop\n");
 
-      for (size_t i = 0; i < total_file_num; ++i) {
+      for (size_t i = 0; i < total_file_num; ++i)
+      {
         nfdchar_t *path = NFD_PathSet_GetPath(&pathSet, i);
 
         size_t encoded_len;
@@ -239,9 +255,13 @@ int main(void) {
       //   printf("ext %zu: %s\n", j + 1, exts[j]);
       //   printf("file_uri %zu: %s\n", j + 1, file_uris[j]);
       // }
-    } else if (nfd_res == NFD_CANCEL) {
+    }
+    else if (nfd_res == NFD_CANCEL)
+    {
       puts("User pressed cancel.");
-    } else {
+    }
+    else
+    {
       printf("Error: %s\n", NFD_GetError());
     }
 
@@ -258,15 +278,18 @@ int main(void) {
 
     printf("✓\n\033[97mGemini response:\n%s\n", res_gemini_req);
 
-    if (query_with_file) {
-      for (size_t i = 0; i < total_file_num; i++) {
+    if (query_with_file)
+    {
+      for (size_t i = 0; i < total_file_num; i++)
+      {
         free(file_uris[i]);
       }
       free(file_uris);
       free(exts);
     }
 
-    if (res_gemini_req) {
+    if (res_gemini_req)
+    {
       free(res_gemini_req);
     }
 
@@ -282,4 +305,5 @@ int main(void) {
   cJSON_Delete(env);
 
   return EXIT_SUCCESS;
+  // exit
 }
