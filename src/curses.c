@@ -2,7 +2,7 @@
 
 #include "pages/introduction.h"
 #include "pages/menu.h"
-#include "pages/test.h"
+#include "pages/tools.h"
 
 void enableVirtualTerminal() {
 #ifdef _WIN32

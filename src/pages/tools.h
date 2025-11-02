@@ -1,10 +1,11 @@
-#ifndef TEST_H
-#define TEST_H
+#ifndef TOOLS_H
+#define TOOLS_H
 
 #include "curses.h"
 #include <stdio.h>
 #include <string.h>
 
-void test(void);
+void tools(void);
 
 #endif
+

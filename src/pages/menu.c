@@ -6,7 +6,7 @@
 
 #include "../features/ai_chat.h"
 #include "../features/study_timer.h"
-#include "test.h"
+#include "tools.h"
 
 #define RGB_TO_NCURSES(r, g, b)                                                \
   ((r) * 1000 / 255), ((g) * 1000 / 255), ((b) * 1000 / 255)
@@ -464,7 +464,7 @@ void menu(void) {
   Social Hall - Access learning materials and updates directly from your teachers.
   )";
 
-    const char *tools = R"(
+    const char *tools_text = R"(
   Tools - Instantly create quizzes and flashcards to boost your review sessions.
   )";
 
@@ -513,8 +513,8 @@ void menu(void) {
 
     current_y += social_height + 1;
     ColoredWord colored_words_tools[] = {{"Tools", 17}};
-    int tools_height = calculate_text_height(tools, text_width) + 2;
-    render_text_with_colors(stdscr, input_w, current_y, input_x, tools, 14, 12,
+    int tools_height = calculate_text_height(tools_text, text_width) + 2;
+    render_text_with_colors(stdscr, input_w, current_y, input_x, tools_text, 14, 12,
                             true, colored_words_tools, 1, 17); // Cyan
 
     current_y += tools_height + 1;
@@ -597,10 +597,10 @@ void menu(void) {
           study_timer();
 
           break;
-        } else if (cursor_pos == 1 && input[0] == 's') {
+        } else if (cursor_pos == 1 && input[0] == 't') {
           endwin();
-
-          test();
+          // Note: No need to clear screen - tools() will call initscr() which takes over
+          tools();
 
           break;
           // } else if (cursor_pos == 1 && input[0] == 't') {
@@ -677,8 +677,8 @@ void menu(void) {
 
         current_y += social_height + 1;
         ColoredWord colored_words_tools[] = {{"Tools", 17}};
-        int tools_height = calculate_text_height(tools, text_width) + 2;
-        render_text_with_colors(stdscr, input_w, current_y, input_x, tools, 14,
+        int tools_height = calculate_text_height(tools_text, text_width) + 2;
+        render_text_with_colors(stdscr, input_w, current_y, input_x, tools_text, 14,
                                 12, true, colored_words_tools, 1, 17); // Cyan
 
         current_y += tools_height + 1;
