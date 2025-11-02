@@ -8,7 +8,9 @@ BUILD_DIR = builds
 
 ifeq ($(OS),Windows_NT)
 TARGET := $(PROGRAM)
-LIB = -lcurl -lcjson -lpthread ../lib/nfd.lib -lole32 -luuid -lpdcursesw -lwinmm -lgdi32 -luser32 -lsqlite3
+# MinGW64 library linking: use .a files, not .lib files
+# For nfd, use libnfd.a instead of nfd.lib
+LIB = -lcurl -lcjson -lpthreadGC1 -lnfd -lole32 -luuid -lpdcursesw -lwinmm -lgdi32 -luser32 -lsqlite3
 RM = del /F /Q
 RMDIR = rmdir /S /Q
 MKDIR = mkdir
@@ -23,14 +25,17 @@ endif
 
 ifeq ($(OS),Windows_NT)
 all:
-	chcp 65001
+	chcp 65001 2>nul || true
 	$(CC) $(CFLAGS) -D__USE_MINGW_ANSI_STDIO=1 $(SRC) -I"../include" -I"./utils" -L"../lib" $(LIB) -o $(TARGET)
+	@echo Copying required DLLs...
+	-@if exist ..\lib\pthread\pthreadGC1.dll copy /Y ..\lib\pthread\pthreadGC1.dll . 2>nul || cp -f ../lib/pthread/pthreadGC1.dll . 2>/dev/null || echo Note: pthreadGC1.dll not found, may use static linking
 
 run: all
 	$(TARGET)
 
 clean:
 	if exist $(TARGET).exe $(RM) $(TARGET).exe
+	if exist pthreadGC1.dll $(RM) pthreadGC1.dll
 else
 all:
 	gcc main.c -o main -pthread -lcurl -lcjson ./lib/libnfd.a $$(pkg-config --cflags --libs gtk+-3.0) ./base64.c
