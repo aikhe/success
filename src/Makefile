@@ -8,10 +8,7 @@ BUILD_DIR = builds
 
 ifeq ($(OS),Windows_NT)
 TARGET := $(PROGRAM)
-# MinGW64 library linking: use .a files, not .lib files
-# For nfd, use libnfd.a instead of nfd.lib
-# Use MinGW64's built-in pthread (winpthread) instead of external pthreadGC1
-LIB = -lcurl -lcjson -lnfd -lole32 -luuid -lpdcursesw -lwinmm -lgdi32 -luser32 -lsqlite3
+LIB = -lcurl -lcjson -lpthread ../lib/nfd.lib -lole32 -luuid -lpdcursesw -lwinmm -lgdi32 -luser32 -lsqlite3
 RM = del /F /Q
 RMDIR = rmdir /S /Q
 MKDIR = mkdir
@@ -26,8 +23,8 @@ endif
 
 ifeq ($(OS),Windows_NT)
 all:
-	chcp 65001 2>nul || true
-	$(CC) $(CFLAGS) -D__USE_MINGW_ANSI_STDIO=1 -pthread $(SRC) -I"../include" -I"./utils" -L"../lib" $(LIB) -o $(TARGET)
+	chcp 65001
+	$(CC) $(CFLAGS) -D__USE_MINGW_ANSI_STDIO=1 $(SRC) -I"../include" -I"./utils" -L"../lib" $(LIB) -o $(TARGET)
 
 run: all
 	$(TARGET)
