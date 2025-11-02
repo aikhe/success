@@ -5,6 +5,7 @@ This guide explains how to build and run this project using MinGW64 on Windows.
 ## Prerequisites
 
 1. **MinGW64** - Install MinGW-w64 (MSYS2 recommended)
+
    - Download from: https://www.msys2.org/
    - Or use a standalone MinGW-w64 installation
 
@@ -18,6 +19,7 @@ The project requires the following libraries. Most are already included in the `
 ### Libraries Already Included
 
 These libraries are present in the `lib/` directory:
+
 - **libcurl** - HTTP client library (libcurl.a, libcurl.dll.a)
 - **cJSON** - JSON parsing library (libcjson.a)
 - **PDCurses** - Terminal UI library (libpdcurses.a, libpdcursesw.a)
@@ -45,14 +47,10 @@ pacman -S mingw-w64-x86_64-sqlite3
 
 ### DLL Dependencies
 
-The following DLLs may be needed at runtime (check `lib/pthread/` for pthread DLLs):
-
-- **pthreadGC1.dll** or **pthreadGC2.dll** - Required if using pthread library
-  - Located in: `lib/pthread/pthreadGC1.dll`
-  - Copy to the same directory as your executable, or add to PATH
-
 - **libcurl.dll** - May be required if using dynamic linking for curl
   - If present, copy to the same directory as your executable
+
+**Note:** The project now uses MinGW64's built-in winpthread library, so external pthread DLLs are not needed. If you see errors about pthreadGC1 being incompatible, ensure the Makefile uses `-pthread` flag (which it does now).
 
 ## Building the Project
 
@@ -68,6 +66,7 @@ cd /c/Users/aikhe/Desktop/ike/local/success/src
 ```
 
 Or use Windows path format if using Windows CMD/PowerShell with MinGW64:
+
 ```bash
 cd C:\Users\aikhe\Desktop\ike\local\success\src
 ```
@@ -79,20 +78,18 @@ make
 ```
 
 Or build and run:
+
 ```bash
 make run
 ```
 
 ### Step 4: Copy Required DLLs (if needed)
 
-After building, if you get DLL errors when running:
+After building, if you get DLL errors when running (e.g., for libcurl.dll):
 
 ```bash
-# Copy pthread DLL to executable location
-cp ../lib/pthread/pthreadGC1.dll ./
-
-# Or for Windows PowerShell/CMD:
-copy ..\lib\pthread\pthreadGC1.dll .
+# Copy required DLLs to executable location if needed
+# Note: pthread is now handled by MinGW64's winpthread, so no pthread DLL is needed
 ```
 
 ## Modified Makefile Changes
@@ -100,7 +97,7 @@ copy ..\lib\pthread\pthreadGC1.dll .
 The Makefile has been updated for MinGW64 compatibility:
 
 1. **Library Linking**: Changed from `../lib/nfd.lib` to `-lnfd` (uses libnfd.a automatically)
-2. **pthread Library**: Explicitly uses `-lpthreadGC1` for MinGW64 compatibility
+2. **pthread Library**: Uses MinGW64's built-in winpthread via `-pthread` flag (no external pthread library needed)
 3. **Compiler Flags**: Already includes `-D__USE_MINGW_ANSI_STDIO=1` for proper MinGW stdio support
 
 ## Troubleshooting
@@ -108,6 +105,7 @@ The Makefile has been updated for MinGW64 compatibility:
 ### Error: "cannot find -lcurl" or similar
 
 **Solution**: Ensure you're linking from the correct directory. The Makefile uses `-L"../lib"` which should point to the `lib/` directory. Verify the library files exist:
+
 ```bash
 ls ../lib/*.a
 ```
@@ -115,25 +113,32 @@ ls ../lib/*.a
 ### Error: "undefined reference to..."
 
 **Possible causes:**
+
 1. Missing library - check if the `.a` file exists in `lib/`
 2. Wrong library order - MinGW64 may require specific library ordering
 3. 32-bit vs 64-bit mismatch - ensure all libraries are compiled for the same architecture
 
 ### Error: "DLL not found" at runtime
 
-**Solution**: Copy required DLLs to the executable directory or add their directory to PATH.
+**Solution**: Copy required DLLs (like libcurl.dll) to the executable directory or add their directory to PATH. Note: pthread is now handled by MinGW64's winpthread, so no pthread DLL is needed.
 
 ### Error: Linking issues with nfd.lib
 
 **Solution**: The Makefile now uses `-lnfd` which will automatically find `libnfd.a`. If you still have issues, you can try:
+
 ```makefile
 LIB = ... -L"../lib" -lnfd ...
 ```
 
 Or explicitly:
+
 ```makefile
 LIB = ... ../lib/libnfd.a ...
 ```
+
+### Error: "skipping incompatible libpthreadGC1.a" or "cannot find -lpthreadGC1"
+
+**Solution**: This error occurs when trying to use the external pthreadGC1 library which is incompatible with MinGW64. The Makefile now uses MinGW64's built-in winpthread library via the `-pthread` flag. This should resolve the issue automatically. Ensure your Makefile has `-pthread` in the compilation command (not `-lpthreadGC1`).
 
 ## Running the Program
 
@@ -144,6 +149,7 @@ After successful build:
 ```
 
 Or:
+
 ```bash
 make run
 ```
@@ -173,6 +179,5 @@ However, the CMakeLists.txt appears to be for a different target (clay_sample.c)
 ## Notes
 
 - The project uses PDCurses (libpdcursesw.a) for terminal UI, which is Windows-specific
-- pthread is provided via pthreadGC1 library, which requires the pthreadGC1.dll at runtime
+- pthread is provided via MinGW64's built-in winpthread library (no external DLL needed)
 - All Windows-specific libraries (ole32, uuid, winmm, gdi32, user32) are system libraries and don't need installation
-
