@@ -66,21 +66,6 @@ static TodoItem *todos = NULL;
 static int todo_count = 0;
 static sqlite3 *db = NULL;
 
-// SQLite callback to load todos
-static int load_todos_callback(void *data, int argc, char **argv,
-                                char **azColName) {
-  todos = realloc(todos, (todo_count + 1) * sizeof(TodoItem));
-  if (!todos) {
-    return 1;
-  }
-
-  todos[todo_count].id = atoi(argv[0]);
-  todos[todo_count].task = strdup(argv[1]);
-  todos[todo_count].done = (atoi(argv[2]) == 1);
-  todo_count++;
-  return 0;
-}
-
 // Initialize database and create table
 static int init_db(void) {
   // Ensure db directory exists
