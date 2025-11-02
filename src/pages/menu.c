@@ -1,7 +1,12 @@
 #include "menu.h"
 #include "curses.h"
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#include "../features/ai_chat.h"
+#include "../features/study_timer.h"
+#include "test.h"
 
 #define RGB_TO_NCURSES(r, g, b)                                                \
   ((r) * 1000 / 255), ((g) * 1000 / 255), ((b) * 1000 / 255)
@@ -359,27 +364,59 @@ static WINDOW *render_text_with_colors(WINDOW *win, int w, int y, int x,
   return text_win;
 }
 
+// Helper function to get color pair for a guide character
+static int get_guide_char_color(char ch) {
+  switch (ch) {
+  case 'c':
+    return 15; // Purple for Chat
+  case 's':
+    return 16; // Green for Social Hall
+  case 't':
+    return 17; // Cyan for Tools
+  case 'p':
+    return 18; // Pink for Study Timer
+  case 'x':
+    return 4; // Orange for Exit
+  default:
+    return 5; // White default
+  }
+}
+
 // Helper function to render a guide line with colored brackets
 static void render_guide_line(int y, int x, const char *text) {
   int pos = 0;
   const char *p = text;
   while (*p) {
     if (*p == '[') {
-      wattron(stdscr, COLOR_PAIR(5)); // White for brackets and letters
+      p++;                // Skip '['
+      int color_pair = 5; // Default white
+      char guide_char = 0;
+
+      if (*p && *p != ']') {
+        guide_char = *p;
+        color_pair = get_guide_char_color(*p);
+      }
+
+      // Draw opening bracket
+      wattron(stdscr, COLOR_PAIR(color_pair));
       mvwaddch(stdscr, y, x + pos, '[');
       pos++;
-      p++;
-      if (*p && *p != ']') {
-        mvwaddch(stdscr, y, x + pos, *p); // Letter
+
+      // Draw letter if present
+      if (guide_char) {
+        mvwaddch(stdscr, y, x + pos, guide_char);
         pos++;
         p++;
       }
+
+      // Draw closing bracket
       if (*p == ']') {
         mvwaddch(stdscr, y, x + pos, ']');
         pos++;
         p++;
       }
-      wattroff(stdscr, COLOR_PAIR(5));
+
+      wattroff(stdscr, COLOR_PAIR(color_pair));
     } else {
       wattron(stdscr, COLOR_PAIR(2)); // Gray for rest
       mvwaddch(stdscr, y, x + pos, *p);
@@ -391,276 +428,349 @@ static void render_guide_line(int y, int x, const char *text) {
 }
 
 void menu(void) {
-  initscr();
-  cbreak();
-  noecho();
-  keypad(stdscr, TRUE);
-  curs_set(1);
+  // Use a loop instead of recursion to avoid infinite recursion warning
+  while (1) {
+    initscr();
+    cbreak();
+    noecho();
+    keypad(stdscr, TRUE);
+    curs_set(1);
 
-  define_colors();
+    define_colors();
 
-  wbkgd(stdscr, COLOR_PAIR(5));
+    wbkgd(stdscr, COLOR_PAIR(5));
 
-  clear();
+    clear();
 
-  int h, w;
-  getmaxyx(stdscr, h, w);
+    int h, w;
+    getmaxyx(stdscr, h, w);
 
-  const char *success_woodmark = R"(
+    const char *success_woodmark = R"(
   █▀▀▀ █  █ ▄▀▀▀ ▄▀▀▀ █▀▀█ █▀▀▀ █▀▀▀ █
   ▀▀▀█ █░░█ █░░░ █░░░ █▀▀▀ ▀▀▀█ ▀▀▀█ ▀
   ▀▀▀▀  ▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀
                                v0.1.10
   )";
 
-  const char *desc = R"(
+    const char *desc = R"(
   Welcome to SUCCESS! This is a TUI (Terminal User Interface) application where you can accelerate your learning, automate your study sessions, and improve your education journey. Enjoy and goodluck!
   )";
 
-  const char *ai_chat = R"(
+    const char *ai_chat_text = R"(
   SUCCESS AI Chatbot - Get instant answers, explanations, and study guidance powered by AI.
   )";
 
-  const char *social_hall = R"(
+    const char *social_hall = R"(
   Social Hall - Access learning materials and updates directly from your teachers.
   )";
 
-  const char *tools = R"(
+    const char *tools = R"(
   Tools - Instantly create quizzes and flashcards to boost your review sessions.
   )";
 
-  const char *study_timer = R"(
+    const char *study_timer_text = R"(
   Smart Study Timer - Focus better with Pomodoro, Active Recall, and Spaced Repetition all in one timer.
   )";
 
-  // initial display
-  draw_status_bar(h, w, " Success v0.1.10 ", " in Student Menu ",
-                  " Made with <3 ");
-  int input_w = w - 10;
-  int input_y = h - 7;
-  int input_x = (w - input_w) / 2;
-  render_input(stdscr, input_w, 3, input_y, input_x, ">");
+    // initial display
+    draw_status_bar(h, w, " Success v0.1.10 ", " in Student Menu ",
+                    " Made with <3 ");
+    int input_w = w - 10;
+    int input_y = h - 7;
+    int input_x = (w - input_w) / 2;
+    render_input(stdscr, input_w, 3, input_y, input_x, ">");
 
-  WINDOW *success_woodmark_win = render_win(stdscr, 40, 10, 1, (w - 38) / 2,
-                                            success_woodmark, 2, 13, false);
-  // add highlight
-  wattron(success_woodmark_win, COLOR_PAIR(5));
-  mvwaddstr(success_woodmark_win, 1, 7, "█  █ ▄▀▀▀ ▄▀▀▀");
-  mvwaddstr(success_woodmark_win, 2, 7, "█░░█ █░░░ █░░░");
-  mvwaddstr(success_woodmark_win, 3, 8, "▀▀▀ ▀▀▀▀ ▀▀▀▀");
-  wattroff(success_woodmark_win, COLOR_PAIR(5));
-  wrefresh(success_woodmark_win);
+    WINDOW *success_woodmark_win = render_win(stdscr, 40, 10, 1, (w - 38) / 2,
+                                              success_woodmark, 2, 13, false);
+    // add highlight
+    wattron(success_woodmark_win, COLOR_PAIR(5));
+    mvwaddstr(success_woodmark_win, 1, 7, "█  █ ▄▀▀▀ ▄▀▀▀");
+    mvwaddstr(success_woodmark_win, 2, 7, "█░░█ █░░░ █░░░");
+    mvwaddstr(success_woodmark_win, 3, 8, "▀▀▀ ▀▀▀▀ ▀▀▀▀");
+    wattroff(success_woodmark_win, COLOR_PAIR(5));
+    wrefresh(success_woodmark_win);
 
-  ColoredWord colored_words[] = {{"SUCCESS!", 14}};
-  int padding = 2;
-  int text_width = input_w - (padding * 2);
-  int desc_height = calculate_text_height(desc, text_width) + 2;
-  render_text_with_colors(stdscr, input_w, 7, input_x, desc, 11, 12, true,
-                          colored_words, 1, 0);
+    ColoredWord colored_words[] = {{"SUCCESS!", 14}};
+    int padding = 2;
+    int text_width = input_w - (padding * 2);
+    int desc_height = calculate_text_height(desc, text_width) + 2;
+    render_text_with_colors(stdscr, input_w, 7, input_x, desc, 11, 12, true,
+                            colored_words, 1, 0);
 
-  ColoredWord colored_words_ai_chat[] = {
-      {"SUCCESS", 15}, {"AI", 15}, {"Chatbot", 15}};
-  int current_y = 7 + desc_height + 1; // 1 space between windows
-  int ai_chat_height = calculate_text_height(ai_chat, text_width) + 2;
-  render_text_with_colors(stdscr, input_w, current_y, input_x, ai_chat, 14, 12,
-                          true, colored_words_ai_chat, 3, 15); // Purple
+    ColoredWord colored_words_ai_chat[] = {
+        {"SUCCESS", 15}, {"AI", 15}, {"Chatbot", 15}};
+    int current_y = 7 + desc_height + 1; // 1 space between windows
+    int ai_chat_height = calculate_text_height(ai_chat_text, text_width) + 2;
+    render_text_with_colors(stdscr, input_w, current_y, input_x, ai_chat_text,
+                            14, 12, true, colored_words_ai_chat, 3,
+                            15); // Purple
 
-  current_y += ai_chat_height + 1;
-  ColoredWord colored_words_social[] = {{"Social", 16}, {"Hall", 16}};
-  int social_height = calculate_text_height(social_hall, text_width) + 2;
-  render_text_with_colors(stdscr, input_w, current_y, input_x, social_hall, 14,
-                          12, true, colored_words_social, 2, 16); // Green
+    current_y += ai_chat_height + 1;
+    ColoredWord colored_words_social[] = {{"Social", 16}, {"Hall", 16}};
+    int social_height = calculate_text_height(social_hall, text_width) + 2;
+    render_text_with_colors(stdscr, input_w, current_y, input_x, social_hall,
+                            14, 12, true, colored_words_social, 2, 16); // Green
 
-  current_y += social_height + 1;
-  ColoredWord colored_words_tools[] = {{"Tools", 17}};
-  int tools_height = calculate_text_height(tools, text_width) + 2;
-  render_text_with_colors(stdscr, input_w, current_y, input_x, tools, 14, 12,
-                          true, colored_words_tools, 1, 17); // Cyan
+    current_y += social_height + 1;
+    ColoredWord colored_words_tools[] = {{"Tools", 17}};
+    int tools_height = calculate_text_height(tools, text_width) + 2;
+    render_text_with_colors(stdscr, input_w, current_y, input_x, tools, 14, 12,
+                            true, colored_words_tools, 1, 17); // Cyan
 
-  current_y += tools_height + 1;
-  ColoredWord colored_words_timer[] = {
-      {"Smart", 18}, {"Study", 18}, {"Timer", 18}};
-  render_text_with_colors(stdscr, input_w, current_y, input_x, study_timer, 14,
-                          12, true, colored_words_timer, 3, 18); // Pink
+    current_y += tools_height + 1;
+    ColoredWord colored_words_timer[] = {
+        {"Smart", 18}, {"Study", 18}, {"Timer", 18}};
+    render_text_with_colors(stdscr, input_w, current_y, input_x,
+                            study_timer_text, 14, 12, true, colored_words_timer,
+                            3, 18); // Pink
 
-  // Selection guide 2 lines up from input bar (wraps to 3 lines on small
-  // screens)
-  int guide_y = input_y - 3;
-  const char *guide_single =
-      "[c] Chat with SUCCESS AI   [s] Access Social "
-      "Hall   [t] Open Tools   [p] Start Study Timer   [x] Exit";
-  const char *guide_line1 =
-      "[c] Chat with SUCCESS AI            [t] Open Tools       ";
-  const char *guide_line2 =
-      "[s] Access Social Hall              [p] Start Study Timer";
-  const char *guide_line3 =
-      "                       [x] Exit                          ";
+    // Selection guide 2 lines up from input bar (wraps to 3 lines on small
+    // screens)
+    int guide_y = input_y - 3;
+    const char *guide_single =
+        "[c] Chat with SUCCESS AI   [s] Access Social "
+        "Hall   [t] Open Tools   [p] Start Study Timer   [x] Exit";
+    const char *guide_line1 =
+        "[c] Chat with SUCCESS AI            [t] Open Tools       ";
+    const char *guide_line2 =
+        "[s] Access Social Hall              [p] Start Study Timer";
+    const char *guide_line3 =
+        "                       [x] Exit                          ";
 
-  int guide_single_len = (int)strlen(guide_single);
-  int guide_line1_len = (int)strlen(guide_line1);
-  int guide_line2_len = (int)strlen(guide_line2);
-  int guide_line3_len = (int)strlen(guide_line3);
-  int max_wrapped_len =
-      guide_line1_len > guide_line2_len ? guide_line1_len : guide_line2_len;
-  if (guide_line3_len > max_wrapped_len) {
-    max_wrapped_len = guide_line3_len;
-  }
-
-  // Use single line if screen is wide enough, otherwise wrap to 3 lines
-  if (w >= guide_single_len + 4) {
-    // Single line (default)
-    int guide_x = (w - guide_single_len) / 2;
-    render_guide_line(guide_y, guide_x, guide_single);
-  } else {
-    // Three lines (wrapped)
-    int guide_x = (w - max_wrapped_len) / 2;
-    render_guide_line(guide_y - 1, guide_x, guide_line1);
-    render_guide_line(guide_y, guide_x, guide_line2);
-    render_guide_line(guide_y + 1, guide_x, guide_line3);
-  }
-
-  int input_cursor_y = input_y + 1;
-  int input_cursor_x = input_x + 3;
-  move(input_cursor_y, input_cursor_x);
-  refresh();
-
-  int capacity = 16;
-  int cursor_pos = 0;
-  char *input = malloc(capacity);
-
-  int ch;
-  while ((ch = getch()) != 'x') {
-    if (ch == KEY_RESIZE) {
-      curs_set(0);
-      clear();
-
-      int h, w;
-      getmaxyx(stdscr, h, w);
-
-      draw_status_bar(h, w, " Success v0.1.10 ", " in Student Menu ",
-                      " Made with <3 ");
-      int input_w = w - 10;
-      int input_y = h - 7;
-      int input_x = (w - input_w) / 2;
-      render_input(stdscr, input_w, 3, input_y, input_x, ">");
-
-      WINDOW *success_woodmark_win = render_win(stdscr, 40, 10, 1, (w - 38) / 2,
-                                                success_woodmark, 2, 13, false);
-      // add highlight
-      wattron(success_woodmark_win, COLOR_PAIR(5));
-      mvwaddstr(success_woodmark_win, 1, 7, "█  █ ▄▀▀▀ ▄▀▀▀");
-      mvwaddstr(success_woodmark_win, 2, 7, "█░░█ █░░░ █░░░");
-      mvwaddstr(success_woodmark_win, 3, 8, "▀▀▀ ▀▀▀▀ ▀▀▀▀");
-      wattroff(success_woodmark_win, COLOR_PAIR(5));
-      wrefresh(success_woodmark_win);
-
-      ColoredWord colored_words[] = {{"SUCCESS!", 14}};
-      int padding = 2;
-      int text_width = input_w - (padding * 2);
-      int desc_height = calculate_text_height(desc, text_width) + 2;
-      render_text_with_colors(stdscr, input_w, 7, input_x, desc, 11, 12, true,
-                              colored_words, 1, 0);
-
-      ColoredWord colored_words_ai_chat[] = {
-          {"SUCCESS", 15}, {"AI", 15}, {"Chatbot", 15}};
-      int current_y = 7 + desc_height + 1; // 1 space between windows
-      int ai_chat_height = calculate_text_height(ai_chat, text_width) + 2;
-      render_text_with_colors(stdscr, input_w, current_y, input_x, ai_chat, 14,
-                              12, true, colored_words_ai_chat, 3, 15); // Purple
-
-      current_y += ai_chat_height + 1;
-      ColoredWord colored_words_social[] = {{"Social", 16}, {"Hall", 16}};
-      int social_height = calculate_text_height(social_hall, text_width) + 2;
-      render_text_with_colors(stdscr, input_w, current_y, input_x, social_hall,
-                              14, 12, true, colored_words_social, 2,
-                              16); // Green
-
-      current_y += social_height + 1;
-      ColoredWord colored_words_tools[] = {{"Tools", 17}};
-      int tools_height = calculate_text_height(tools, text_width) + 2;
-      render_text_with_colors(stdscr, input_w, current_y, input_x, tools, 14,
-                              12, true, colored_words_tools, 1, 17); // Cyan
-
-      current_y += tools_height + 1;
-      ColoredWord colored_words_timer[] = {
-          {"Smart", 18}, {"Study", 18}, {"Timer", 18}};
-      render_text_with_colors(stdscr, input_w, current_y, input_x, study_timer,
-                              14, 12, true, colored_words_timer, 3, 18); // Pink
-
-      // Selection guide 2 lines up from input bar (wraps to 3 lines on small
-      // screens)
-      int guide_y = input_y - 3;
-      const char *guide_single =
-          "[c] Chat with SUCCESS AI   [s] Access Social "
-          "Hall   [t] Open Tools   [p] Start Study Timer   [x] Exit";
-      const char *guide_line1 =
-          "[c] Chat with SUCCESS AI            [t] Open Tools       ";
-      const char *guide_line2 =
-          "[s] Access Social Hall              [p] Start Study Timer";
-      const char *guide_line3 =
-          "                       [x] Exit                          ";
-
-      int guide_single_len = (int)strlen(guide_single);
-      int guide_line1_len = (int)strlen(guide_line1);
-      int guide_line2_len = (int)strlen(guide_line2);
-      int guide_line3_len = (int)strlen(guide_line3);
-      int max_wrapped_len =
-          guide_line1_len > guide_line2_len ? guide_line1_len : guide_line2_len;
-      if (guide_line3_len > max_wrapped_len) {
-        max_wrapped_len = guide_line3_len;
-      }
-
-      // Use single line if screen is wide enough, otherwise wrap to 3 lines
-      if (w >= guide_single_len + 4) {
-        // Single line (default)
-        int guide_x = (w - guide_single_len) / 2;
-        render_guide_line(guide_y, guide_x, guide_single);
-      } else {
-        // Three lines (wrapped)
-        int guide_x = (w - max_wrapped_len) / 2;
-        render_guide_line(guide_y - 1, guide_x, guide_line1);
-        render_guide_line(guide_y, guide_x, guide_line2);
-        render_guide_line(guide_y + 1, guide_x, guide_line3);
-      }
-
-      input_cursor_y = input_y + 1;
-      input_cursor_x = input_x + 3;
-
-      if (cursor_pos > 0) {
-        wattron(stdscr, COLOR_PAIR(1));
-        for (int i = 0; i < cursor_pos; i++) {
-          mvwaddch(stdscr, input_cursor_y, input_cursor_x + i, input[i]);
-        }
-        wattroff(stdscr, COLOR_PAIR(1));
-      }
-      move(input_cursor_y, input_cursor_x + cursor_pos);
-
-      curs_set(1);
-      refresh();
-    } else if ((ch == KEY_BACKSPACE || ch == 127 || ch == 8) &&
-               cursor_pos > 0) {
-      cursor_pos--;
-      wattron(stdscr, COLOR_PAIR(1));
-      mvwaddch(stdscr, input_cursor_y, input_cursor_x + cursor_pos, ' ');
-      wattroff(stdscr, COLOR_PAIR(1));
-      wmove(stdscr, input_cursor_y, input_cursor_x + cursor_pos);
-    } else if (ch >= 32 && ch <= 126) {
-      if (cursor_pos + 1 >= capacity) {
-        capacity *= 2;
-        char *new_buf = realloc(input, capacity);
-        input = new_buf;
-      }
-
-      input[cursor_pos++] = (char)ch;
-
-      wattron(stdscr, COLOR_PAIR(1));
-      mvwaddch(stdscr, input_cursor_y, input_cursor_x + cursor_pos - 1, ch);
-      wattroff(stdscr, COLOR_PAIR(1));
-
-      // mvprintw(10, 10, "%d", cursor_pos);
-      refresh();
+    int guide_single_len = (int)strlen(guide_single);
+    int guide_line1_len = (int)strlen(guide_line1);
+    int guide_line2_len = (int)strlen(guide_line2);
+    int guide_line3_len = (int)strlen(guide_line3);
+    int max_wrapped_len =
+        guide_line1_len > guide_line2_len ? guide_line1_len : guide_line2_len;
+    if (guide_line3_len > max_wrapped_len) {
+      max_wrapped_len = guide_line3_len;
     }
-  }
 
-  endwin();
+    // Use single line if screen is wide enough, otherwise wrap to 3 lines
+    if (w >= guide_single_len + 4) {
+      // Single line (default)
+      int guide_x = (w - guide_single_len) / 2;
+      render_guide_line(guide_y, guide_x, guide_single);
+    } else {
+      // Three lines (wrapped)
+      int guide_x = (w - max_wrapped_len) / 2;
+      render_guide_line(guide_y - 1, guide_x, guide_line1);
+      render_guide_line(guide_y, guide_x, guide_line2);
+      render_guide_line(guide_y + 1, guide_x, guide_line3);
+    }
+
+    int input_cursor_y = input_y + 1;
+    int input_cursor_x = input_x + 3;
+    move(input_cursor_y, input_cursor_x);
+    refresh();
+
+    int capacity = 16;
+    int cursor_pos = 0;
+    char *input = malloc(capacity);
+    input[0] = '\0';
+
+    int ch;
+    while (1) {
+      ch = getch();
+
+      if (ch == 10 || ch == KEY_ENTER) {
+        if (cursor_pos == 1 && input[0] == 'c') {
+          endwin();
+#ifdef _WIN32
+          system("cls");
+#else
+          system("clear");
+#endif
+          ai_chat();
+
+          break;
+        } else if (cursor_pos == 1 && input[0] == 'p') {
+          endwin();
+
+#ifdef _WIN32
+          system("cls");
+#else
+          system("clear");
+#endif
+
+          study_timer();
+
+          break;
+        } else if (cursor_pos == 1 && input[0] == 's') {
+          endwin();
+
+          test();
+
+          break;
+          // } else if (cursor_pos == 1 && input[0] == 't') {
+        } else if (cursor_pos == 1 && input[0] == 'x') {
+          // User typed 'x' and pressed Enter - exit program completely
+          endwin();
+          free(input);
+          exit(0);
+        }
+        // Clear input on Enter if not a recognized command
+        cursor_pos = 0;
+        input[0] = '\0';
+        // Clear the input line visually (use input_w width)
+        int input_w = getmaxx(stdscr) - 10;
+        int clear_width = input_w - 4; // Account for prompt "> "
+        if (clear_width > 0) {
+          wattron(stdscr, COLOR_PAIR(1));
+          mvwhline(stdscr, input_cursor_y, input_cursor_x, ' ', clear_width);
+          wattroff(stdscr, COLOR_PAIR(1));
+        }
+        move(input_cursor_y, input_cursor_x);
+        refresh();
+        continue;
+      }
+
+      if (ch == KEY_RESIZE) {
+        curs_set(0);
+        clear();
+
+        int h, w;
+        getmaxyx(stdscr, h, w);
+
+        draw_status_bar(h, w, " Success v0.1.10 ", " in Student Menu ",
+                        " Made with <3 ");
+        int input_w = w - 10;
+        int input_y = h - 7;
+        int input_x = (w - input_w) / 2;
+        render_input(stdscr, input_w, 3, input_y, input_x, ">");
+
+        WINDOW *success_woodmark_win = render_win(
+            stdscr, 40, 10, 1, (w - 38) / 2, success_woodmark, 2, 13, false);
+        // add highlight
+        wattron(success_woodmark_win, COLOR_PAIR(5));
+        mvwaddstr(success_woodmark_win, 1, 7, "█  █ ▄▀▀▀ ▄▀▀▀");
+        mvwaddstr(success_woodmark_win, 2, 7, "█░░█ █░░░ █░░░");
+        mvwaddstr(success_woodmark_win, 3, 8, "▀▀▀ ▀▀▀▀ ▀▀▀▀");
+        wattroff(success_woodmark_win, COLOR_PAIR(5));
+        wrefresh(success_woodmark_win);
+
+        ColoredWord colored_words[] = {{"SUCCESS!", 14}};
+        int padding = 2;
+        int text_width = input_w - (padding * 2);
+        int desc_height = calculate_text_height(desc, text_width) + 2;
+        render_text_with_colors(stdscr, input_w, 7, input_x, desc, 11, 12, true,
+                                colored_words, 1, 0);
+
+        ColoredWord colored_words_ai_chat[] = {
+            {"SUCCESS", 15}, {"AI", 15}, {"Chatbot", 15}};
+        int current_y = 7 + desc_height + 1; // 1 space between windows
+        int ai_chat_height =
+            calculate_text_height(ai_chat_text, text_width) + 2;
+        render_text_with_colors(stdscr, input_w, current_y, input_x,
+                                ai_chat_text, 14, 12, true,
+                                colored_words_ai_chat, 3,
+                                15); // Purple
+
+        current_y += ai_chat_height + 1;
+        ColoredWord colored_words_social[] = {{"Social", 16}, {"Hall", 16}};
+        int social_height = calculate_text_height(social_hall, text_width) + 2;
+        render_text_with_colors(stdscr, input_w, current_y, input_x,
+                                social_hall, 14, 12, true, colored_words_social,
+                                2,
+                                16); // Green
+
+        current_y += social_height + 1;
+        ColoredWord colored_words_tools[] = {{"Tools", 17}};
+        int tools_height = calculate_text_height(tools, text_width) + 2;
+        render_text_with_colors(stdscr, input_w, current_y, input_x, tools, 14,
+                                12, true, colored_words_tools, 1, 17); // Cyan
+
+        current_y += tools_height + 1;
+        ColoredWord colored_words_timer[] = {
+            {"Smart", 18}, {"Study", 18}, {"Timer", 18}};
+        render_text_with_colors(stdscr, input_w, current_y, input_x,
+                                study_timer_text, 14, 12, true,
+                                colored_words_timer, 3, 18); // Pink
+
+        // Selection guide 2 lines up from input bar (wraps to 3 lines on small
+        // screens)
+        int guide_y = input_y - 3;
+        const char *guide_single =
+            "[c] Chat with SUCCESS AI   [s] Access Social "
+            "Hall   [t] Open Tools   [p] Start Study Timer   [x] Exit";
+        const char *guide_line1 =
+            "[c] Chat with SUCCESS AI            [t] Open Tools       ";
+        const char *guide_line2 =
+            "[s] Access Social Hall              [p] Start Study Timer";
+        const char *guide_line3 =
+            "                       [x] Exit                          ";
+
+        int guide_single_len = (int)strlen(guide_single);
+        int guide_line1_len = (int)strlen(guide_line1);
+        int guide_line2_len = (int)strlen(guide_line2);
+        int guide_line3_len = (int)strlen(guide_line3);
+        int max_wrapped_len = guide_line1_len > guide_line2_len
+                                  ? guide_line1_len
+                                  : guide_line2_len;
+        if (guide_line3_len > max_wrapped_len) {
+          max_wrapped_len = guide_line3_len;
+        }
+
+        // Use single line if screen is wide enough, otherwise wrap to 3 lines
+        if (w >= guide_single_len + 4) {
+          // Single line (default)
+          int guide_x = (w - guide_single_len) / 2;
+          render_guide_line(guide_y, guide_x, guide_single);
+        } else {
+          // Three lines (wrapped)
+          int guide_x = (w - max_wrapped_len) / 2;
+          render_guide_line(guide_y - 1, guide_x, guide_line1);
+          render_guide_line(guide_y, guide_x, guide_line2);
+          render_guide_line(guide_y + 1, guide_x, guide_line3);
+        }
+
+        input_cursor_y = input_y + 1;
+        input_cursor_x = input_x + 3;
+
+        if (cursor_pos > 0) {
+          wattron(stdscr, COLOR_PAIR(1));
+          for (int i = 0; i < cursor_pos; i++) {
+            mvwaddch(stdscr, input_cursor_y, input_cursor_x + i, input[i]);
+          }
+          wattroff(stdscr, COLOR_PAIR(1));
+        }
+        move(input_cursor_y, input_cursor_x + cursor_pos);
+
+        curs_set(1);
+        refresh();
+      } else if ((ch == KEY_BACKSPACE || ch == 127 || ch == 8) &&
+                 cursor_pos > 0) {
+        cursor_pos--;
+        input[cursor_pos] = '\0'; // Null-terminate after backspace
+        wattron(stdscr, COLOR_PAIR(1));
+        mvwaddch(stdscr, input_cursor_y, input_cursor_x + cursor_pos, ' ');
+        wattroff(stdscr, COLOR_PAIR(1));
+        wmove(stdscr, input_cursor_y, input_cursor_x + cursor_pos);
+      } else if (ch >= 32 && ch <= 126) {
+        if (cursor_pos + 1 >= capacity) {
+          capacity *= 2;
+          char *new_buf = realloc(input, capacity);
+          input = new_buf;
+        }
+
+        input[cursor_pos++] = (char)ch;
+        input[cursor_pos] = '\0'; // Null-terminate
+
+        wattron(stdscr, COLOR_PAIR(1));
+        mvwaddch(stdscr, input_cursor_y, input_cursor_x + cursor_pos - 1, ch);
+        wattroff(stdscr, COLOR_PAIR(1));
+
+        // mvprintw(10, 10, "%d", cursor_pos);
+        refresh();
+      }
+    }
+
+    // If we break from the inner loop, it means ai_chat() returned
+    // Free input and continue to redraw menu (outer loop will restart)
+    free(input);
+
+    // Continue loop to return to menu (instead of recursion)
+    continue;
+  }
 }

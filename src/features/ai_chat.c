@@ -1,3 +1,5 @@
+#include "ai_chat.h"
+
 // define __declspc as empty for native linux build (0or MSVC)
 #include <stddef.h>
 #ifndef __declspec
@@ -18,16 +20,16 @@
 #undef MOUSE_MOVED // remove redefinition errors from wincon.h macro
 #include <curses.h>
 
-#include "pages/introduction.h"
+// #include "pages/introduction.h"
 
-#include "gemini_api/gemini_request.h"
-#include "gemini_api/get_file_uri.h"
-#include "gemini_api/get_upload_url.h"
+#include "../gemini_api/gemini_request.h"
+#include "../gemini_api/get_file_uri.h"
+#include "../gemini_api/get_upload_url.h"
 
-#include "utils/gemini_loading.h"
-#include "utils/get_file_mime_type.h"
-#include "utils/read_file.h"
-#include "utils/read_file_b64.h"
+#include "../utils/gemini_loading.h"
+#include "../utils/get_file_mime_type.h"
+#include "../utils/read_file.h"
+#include "../utils/read_file_b64.h"
 
 #define QUOTE(...) #__VA_ARGS__ // pre-processor to turn content into string
 
@@ -50,20 +52,18 @@
 // #endif
 // }
 
-int main(void) {
-  // Set locale BEFORE calling any curses functions
-  setlocale(LC_ALL, "en_US.UTF-8");
-
-// On Windows, try UTF-8 locale if the above fails
-#ifdef _WIN32
-  if (!setlocale(LC_ALL, "en_US.UTF-8")) {
-    setlocale(LC_ALL, "C.UTF-8");
-  }
-#endif
+int ai_chat(void) {
+  //   // Set locale BEFORE calling any curses functions
+  //   setlocale(LC_ALL, "en_US.UTF-8");
+  //
+  // // On Windows, try UTF-8 locale if the above fails
+  // #ifdef _WIN32
+  //   if (!setlocale(LC_ALL, "en_US.UTF-8")) {
+  //     setlocale(LC_ALL, "C.UTF-8");
+  //   }
+  // #endif
 
   // enableVirtualTerminal();
-
-  introduction_page();
 
   // setvbuf(stdout, NULL, _IONBF, 0);
 
@@ -160,8 +160,8 @@ int main(void) {
     char **file_uris = NULL;
     char *res_gemini_req = NULL;
 
-    printf("\033[97mEnter your prompt \033[34m['1' to "
-           "attach files, enter 'x' to "
+    printf("\033[97mEnter your prompt \033[34m[f to "
+           "attach files, enter x to "
            "exit]: "
            "\033[0m");
 
@@ -171,7 +171,7 @@ int main(void) {
       if (strcmp(userPrompt, "x") == 0) {
         printf("[INFO] Exited\n");
         break;
-      } else if (strcmp(userPrompt, "1") == 0) {
+      } else if (strcmp(userPrompt, "f") == 0) {
         nfd_res = NFD_OpenDialogMultiple("png,jpeg,jpg,pdf", NULL, &pathSet);
 
         for (size_t i = 0; i < NFD_PathSet_GetCount(&pathSet); ++i) {
@@ -185,7 +185,7 @@ int main(void) {
     snprintf(fullPrompt, sizeof(fullPrompt),
              "System Prompt: %s\nUser Prompt: %s", systemPrompt, userPrompt);
 
-    // printf("Full prompt:%s\n", fullPrompt);
+    // printf("Full prompt:\n%s\n", fullPrompt);
 
     pthread_t generate_thread = {0};
 
@@ -199,7 +199,7 @@ int main(void) {
 
       int capacity = 0;
 
-      // printf("im here loop\n");
+      printf("im here loop\n");
 
       for (size_t i = 0; i < total_file_num; ++i) {
         nfdchar_t *path = NFD_PathSet_GetPath(&pathSet, i);
@@ -208,19 +208,19 @@ int main(void) {
         unsigned char *file_data = read_file_b64(path, &encoded_len);
         const char *ext = get_file_mime_type(path);
 
-        // printf("im here loop 2\n");
+        printf("im here loop 2\n");
 
         char *res_upload_url =
             get_upload_url(encoded_len, gemini_file_url->valuestring,
                            gemini_api_key->valuestring, (char *)ext);
 
-        // printf("im here loop 3\n");
+        printf("im here loop 3\n");
 
         char *res_file_uri =
             get_file_uri(file_data, encoded_len, path, res_upload_url,
                          gemini_api_key->valuestring, (char *)ext);
 
-        // printf("im here loop 4\n");
+        printf("im here loop 4\n");
 
         capacity = (capacity == 0) ? 1 : (capacity + 1);
         char **new_ext = realloc(exts, (capacity) * sizeof(char *));
@@ -240,17 +240,21 @@ int main(void) {
       //   printf("file_uri %zu: %s\n", j + 1, file_uris[j]);
       // }
     } else if (nfd_res == NFD_CANCEL) {
-      puts("User pressed cancel.");
+      // puts("User pressed cancel.");
     } else {
       printf("Error: %s\n", NFD_GetError());
     }
 
     bool query_with_file = total_file_num > 0;
 
+    // printf("im here hi\n");
+
     res_gemini_req = gemini_request(
         gemini_api_url->valuestring, query_with_file ? file_uris : NULL,
         gemini_api_key->valuestring, fullPrompt, query_with_file ? exts : NULL,
         total_file_num);
+
+    // printf("im here wow\n");
 
     is_generating = false;
     pthread_cancel(generate_thread);

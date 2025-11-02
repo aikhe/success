@@ -1,15 +1,14 @@
 CC = gcc
 CFLAGS = -Wall -g -DPDC_WIDE
 PROGRAM ?= curses
-# SRC = main.c utils/get_file_mime_type.c utils/read_file.c utils/replace_escaped_ansii.c utils/read_file_b64.c utils/gemini_loading.c callbacks/write_callback.c utils/grep_string.c gemini_api/get_upload_url.c gemini_api/get_file_uri.c gemini_api/gemini_request.c utils/delay.c pages/introduction.c 
-SRC = $(PROGRAM).c pages/introduction.c pages/test.c pages/menu.c utils/delay.c 
+SRC = $(PROGRAM).c utils/get_file_mime_type.c utils/read_file.c utils/replace_escaped_ansii.c utils/read_file_b64.c utils/gemini_loading.c callbacks/write_callback.c utils/grep_string.c gemini_api/get_upload_url.c gemini_api/get_file_uri.c gemini_api/gemini_request.c utils/delay.c pages/introduction.c pages/menu.c features/ai_chat.c features/study_timer.c pages/test.c
+# SRC = $(PROGRAM).c pages/introduction.c pages/menu.c utils/delay.c 
 # OBJ = $(SRC:.c=.o)
 BUILD_DIR = builds
 
 ifeq ($(OS),Windows_NT)
 TARGET := $(PROGRAM)
-# LIB = -lcurl -lcjson -lpthread ../lib/nfd.lib -lole32 -luuid -lpdcurses
-LIB = -lpdcursesw -lwinmm -lgdi32 -luser32 -lsqlite3
+LIB = -lcurl -lcjson -lpthread ../lib/nfd.lib -lole32 -luuid -lpdcursesw -lwinmm -lgdi32 -luser32 -lsqlite3
 RM = del /F /Q
 RMDIR = rmdir /S /Q
 MKDIR = mkdir
