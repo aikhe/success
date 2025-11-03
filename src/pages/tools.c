@@ -1,4 +1,6 @@
 #include "tools.h"
+#include "../features/flashcard.h"
+#include "../features/quiz.h"
 #include "../features/todo.h"
 #include "curses.h"
 #include "menu.h"
@@ -308,168 +310,179 @@ static void render_guide_line(int y, int x, const char *text) {
 }
 
 void tools(void) {
-  // Initialize ncurses - check for errors
-  WINDOW *scr = initscr();
-  if (scr == NULL) {
-    // If initscr fails, we can't continue
-    return;
-  }
+  // Use a loop to return to tools page after quiz/flashcard
+  while (1) {
+    // Initialize ncurses - check for errors
+    WINDOW *scr = initscr();
+    if (scr == NULL) {
+      // If initscr fails, we can't continue
+      return;
+    }
 
-  cbreak();
-  noecho();
-  keypad(stdscr, TRUE);
-  curs_set(1);
+    cbreak();
+    noecho();
+    keypad(stdscr, TRUE);
+    curs_set(1);
 
-  define_colors();
+    define_colors();
 
-  wbkgd(stdscr, COLOR_PAIR(5));
+    wbkgd(stdscr, COLOR_PAIR(5));
 
-  clear();
+    clear();
 
-  int h, w;
-  getmaxyx(stdscr, h, w);
+    int h, w;
+    getmaxyx(stdscr, h, w);
 
-  const char *tools_title = R"(
-  ▀██▀ █▀▀█ █▀▀█ █    █▀▀▀ █
-   ██  █░░█ █░░█ █    ▀▀▀█ ▀
+    const char *tools_title = R"(
+  ▀██▀ █▀▀█ █▀▀█ ██   █▀▀▀ █
+   ██  █░░█ █░░█ ██   ▀▀▀█ ▀
    ▀▀  ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀
-       Powered by A.I
+              Powered by A.I
   )";
 
-  // Text content for each section
-  const char *desc = R"(
+    // Text content for each section
+    const char *desc = R"(
   Create powerful study materials with AI-powered tools. Generate flashcards, quizzes, and manage your todo list all in one place.
   )";
 
-  const char *flashcard_text = R"(
+    const char *flashcard_text = R"(
   Flashcard Generator - Powered by AI. Create custom flashcards from any topic or text to boost your memorization.
   )";
 
-  const char *quiz_text = R"(
+    const char *quiz_text = R"(
   Quiz Maker - Powered by AI. Generate comprehensive quizzes with multiple question types to test your knowledge.
   )";
 
-  const char *todo_text = R"(
+    const char *todo_text = R"(
   Todo List - Organize and track your study tasks and assignments with a simple, efficient todo list manager.
   )";
 
-  // Initial display
-  draw_status_bar(h, w, " Success v0.1.10 ", " in Tools ", " Made with <3 ");
-  int input_w = w - 10;
-  int input_y = h - 7;
-  int input_x = (w - input_w) / 2;
-  render_input(stdscr, input_w, 3, input_y, input_x, ">");
+    // Initial display
+    draw_status_bar(h, w, " Success v0.1.10 ", " in Tools ", " Made with <3 ");
+    int input_w = w - 10;
+    int input_y = h - 7;
+    int input_x = (w - input_w) / 2;
+    render_input(stdscr, input_w, 3, input_y, input_x, ">");
 
-  // Render tools title at the top
-  WINDOW *tools_title_win =
-      render_win(stdscr, 38, 6, 1, (w - 36) / 2, tools_title, 2, 13, false);
-  // Default gray color (no highlight)
-  wrefresh(tools_title_win);
+    // Render tools title at the top
+    WINDOW *tools_title_win =
+        render_win(stdscr, 38, 6, 1, (w - 36) / 2, tools_title, 2, 13, false);
+    // Default gray color (no highlight)
+    wrefresh(tools_title_win);
 
-  // Calculate positions for text windows (start after title)
-  int padding = 2;
-  int text_width = input_w - (padding * 2);
-  int current_y = 7; // Removed 1 space
+    // Calculate positions for text windows (start after title)
+    int padding = 2;
+    int text_width = input_w - (padding * 2);
+    int current_y = 7; // Removed 1 space
 
-  // Render description
-  ColoredWord colored_words_desc[] = {{"AI", 15}, {"powered", 15}};
-  int desc_height = calculate_text_height_local(desc, text_width) + 2;
-  render_text_with_colors(stdscr, input_w, current_y, input_x, desc, 11, 12,
-                          true, colored_words_desc, 2, 0);
+    // Render description
+    ColoredWord colored_words_desc[] = {{"AI", 15}, {"powered", 15}};
+    int desc_height = calculate_text_height_local(desc, text_width) + 2;
+    render_text_with_colors(stdscr, input_w, current_y, input_x, desc, 11, 12,
+                            true, colored_words_desc, 2, 0);
 
-  current_y += desc_height + 1;
+    current_y += desc_height + 1;
 
-  // Render Flashcard window (Purple sidebar)
-  ColoredWord colored_words_flashcard[] = {
-      {"Flashcard", 15}, {"Generator", 15}, {"AI", 15}};
-  int flashcard_height =
-      calculate_text_height_local(flashcard_text, text_width) + 2;
-  render_text_with_colors(stdscr, input_w, current_y, input_x, flashcard_text,
-                          14, 12, true, colored_words_flashcard, 3,
-                          15); // Purple
+    // Render Flashcard window (Purple sidebar)
+    ColoredWord colored_words_flashcard[] = {
+        {"Flashcard", 15}, {"Generator", 15}, {"AI", 15}};
+    int flashcard_height =
+        calculate_text_height_local(flashcard_text, text_width) + 2;
+    render_text_with_colors(stdscr, input_w, current_y, input_x, flashcard_text,
+                            14, 12, true, colored_words_flashcard, 3,
+                            15); // Purple
 
-  current_y += flashcard_height + 1;
+    current_y += flashcard_height + 1;
 
-  // Render Quiz window (Green sidebar)
-  ColoredWord colored_words_quiz[] = {{"Quiz", 16}, {"Maker", 16}, {"AI", 16}};
-  int quiz_height = calculate_text_height_local(quiz_text, text_width) + 2;
-  render_text_with_colors(stdscr, input_w, current_y, input_x, quiz_text, 14,
-                          12, true, colored_words_quiz, 3, 16); // Green
+    // Render Quiz window (Green sidebar)
+    ColoredWord colored_words_quiz[] = {{"Quiz", 16}, {"Maker", 16}, {"AI", 16}};
+    int quiz_height = calculate_text_height_local(quiz_text, text_width) + 2;
+    render_text_with_colors(stdscr, input_w, current_y, input_x, quiz_text, 14,
+                            12, true, colored_words_quiz, 3, 16); // Green
 
-  current_y += quiz_height + 1;
+    current_y += quiz_height + 1;
 
-  // Render Todo window (Cyan sidebar)
-  ColoredWord colored_words_todo[] = {{"Todo", 17}, {"List", 17}};
-  render_text_with_colors(stdscr, input_w, current_y, input_x, todo_text, 14,
-                          12, true, colored_words_todo, 2, 17); // Cyan
+    // Render Todo window (Cyan sidebar)
+    ColoredWord colored_words_todo[] = {{"Todo", 17}, {"List", 17}};
+    render_text_with_colors(stdscr, input_w, current_y, input_x, todo_text, 14,
+                            12, true, colored_words_todo, 2, 17); // Cyan
 
-  // Selection guide 2 lines up from input bar (wraps on small screens)
-  int guide_y = input_y - 3;
-  const char *guide_single =
-      "[f] Flashcard Generator   [q] Quiz Maker   [t] Todo List   [x] Exit";
-  const char *guide_line1 =
-      "[f] Flashcard Generator            [t] Todo List       ";
-  const char *guide_line2 =
-      "[q] Quiz Maker                     [x] Exit            ";
+    // Selection guide 2 lines up from input bar (wraps on small screens)
+    int guide_y = input_y - 3;
+    const char *guide_single =
+        "[f] Flashcard Generator   [q] Quiz Maker   [t] Todo List   [x] Exit";
+    const char *guide_line1 =
+        "[f] Flashcard Generator            [t] Todo List       ";
+    const char *guide_line2 =
+        "[q] Quiz Maker                     [x] Exit            ";
 
-  int guide_single_len = (int)strlen(guide_single);
-  int guide_line1_len = (int)strlen(guide_line1);
-  int guide_line2_len = (int)strlen(guide_line2);
-  int max_wrapped_len =
-      guide_line1_len > guide_line2_len ? guide_line1_len : guide_line2_len;
+    int guide_single_len = (int)strlen(guide_single);
+    int guide_line1_len = (int)strlen(guide_line1);
+    int guide_line2_len = (int)strlen(guide_line2);
+    int max_wrapped_len =
+        guide_line1_len > guide_line2_len ? guide_line1_len : guide_line2_len;
 
-  // Use single line if screen is wide enough, otherwise wrap to 2 lines
-  if (w >= guide_single_len + 4) {
-    // Single line (default)
-    int guide_x = (w - guide_single_len) / 2;
-    render_guide_line(guide_y, guide_x, guide_single);
-  } else {
-    // Two lines (wrapped)
-    int guide_x = (w - max_wrapped_len) / 2;
-    render_guide_line(guide_y - 1, guide_x, guide_line1);
-    render_guide_line(guide_y, guide_x, guide_line2);
-  }
+    // Use single line if screen is wide enough, otherwise wrap to 2 lines
+    if (w >= guide_single_len + 4) {
+      // Single line (default)
+      int guide_x = (w - guide_single_len) / 2;
+      render_guide_line(guide_y, guide_x, guide_single);
+    } else {
+      // Two lines (wrapped)
+      int guide_x = (w - max_wrapped_len) / 2;
+      render_guide_line(guide_y - 1, guide_x, guide_line1);
+      render_guide_line(guide_y, guide_x, guide_line2);
+    }
 
-  int input_cursor_y = input_y + 1;
-  int input_cursor_x = input_x + 3;
-  move(input_cursor_y, input_cursor_x);
+    int input_cursor_y = input_y + 1;
+    int input_cursor_x = input_x + 3;
+    move(input_cursor_y, input_cursor_x);
 
-  // Force a complete screen refresh to ensure everything is displayed
-  refresh();
-  doupdate();
+    // Force a complete screen refresh to ensure everything is displayed
+    refresh();
+    doupdate();
 
-  int capacity = 16;
-  int cursor_pos = 0;
-  char *input = malloc(capacity);
-  if (input == NULL) {
-    endwin();
-    return;
-  }
-  input[0] = '\0'; // Initialize to empty string
+    int capacity = 16;
+    int cursor_pos = 0;
+    char *input = malloc(capacity);
+    if (input == NULL) {
+      endwin();
+      return;
+    }
+    input[0] = '\0'; // Initialize to empty string
 
-  // Flush any buffered input before starting
-  flushinp();
+    // Flush any buffered input before starting
+    flushinp();
 
-  int ch;
-  while (1) {
-    ch = getch();
+    int ch;
+    while (1) {
+      ch = getch();
 
-    if (ch == 10 || ch == KEY_ENTER) {
-      if (cursor_pos == 1 && input[0] == 'f') {
-        // Flashcard generator - TODO: implement
-        // For now, just clear input
-      } else if (cursor_pos == 1 && input[0] == 'q') {
-        // Quiz maker - TODO: implement
-        // For now, just clear input
-      } else if (cursor_pos == 1 && input[0] == 't') {
-        // Todo list - pass NULL to read from session file
-        endwin();
-        todo(NULL); // NULL will make it read from session file
-        break;
-      } else if (cursor_pos == 1 && input[0] == 'x') {
-        // Exit and return to menu
-        break;
-      }
+      if (ch == 10 || ch == KEY_ENTER) {
+        if (cursor_pos == 1 && input[0] == 'f') {
+          // Flashcard generator
+          endwin();
+          flashcard();
+          free(input);
+          break; // Break inner loop, will restart tools
+        } else if (cursor_pos == 1 && input[0] == 'q') {
+          // Quiz maker
+          endwin();
+          quiz();
+          free(input);
+          break; // Break inner loop, will restart tools
+        } else if (cursor_pos == 1 && input[0] == 't') {
+          // Todo list - pass NULL to read from session file
+          endwin();
+          todo(NULL); // NULL will make it read from session file
+          free(input);
+          break; // Break inner loop, will restart tools
+        } else if (cursor_pos == 1 && input[0] == 'x') {
+          // Exit and return to menu
+          free(input);
+          endwin();
+          return;
+        }
       // Clear input on Enter if not a recognized command or command not yet
       // implemented
       cursor_pos = 0;
@@ -606,8 +619,10 @@ void tools(void) {
 
       refresh();
     }
+    } // Close inner while loop
+    
+    free(input);
+    // Continue outer loop to return to tools (will restart with new input)
+    continue;
   }
-
-  free(input);
-  endwin();
 }

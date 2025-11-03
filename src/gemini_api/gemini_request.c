@@ -45,7 +45,7 @@ char *gemini_request(char *gemini_url, char **file_uris, char *gemini_api_key,
     curl_easy_setopt(curl, CURLOPT_TCP_NODELAY, 1L);
 
     // verbose logging
-    curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+    // curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
 
     curl_easy_setopt(curl, CURLOPT_URL, gemini_url);
     curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);

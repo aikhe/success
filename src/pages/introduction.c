@@ -12,6 +12,8 @@
 #include <winuser.h>
 
 #include "menu.h"
+#include "../features/ai_chat.h"
+#include "../features/social_hall.h"
 
 #ifdef _WIN32
 #include <direct.h>
@@ -1101,6 +1103,14 @@ void signup_page(void) {
                 // For now, continue anyway
               }
 
+              // Save username to session file
+              mkdir("db", 0755);
+              FILE *session_file = fopen("db/.session", "w");
+              if (session_file) {
+                fprintf(session_file, "%s\n", username);
+                fclose(session_file);
+              }
+
               delwin(confirm_win);
               clear();
               refresh();
@@ -1595,6 +1605,14 @@ void login_page(void) {
           should_exit = 1;
           break;
         } else {
+          // Save username to session file
+          mkdir("db", 0755);
+          FILE *session_file = fopen("db/.session", "w");
+          if (session_file) {
+            fprintf(session_file, "%s\n", username_buf);
+            fclose(session_file);
+          }
+
           // User found - navigate to appropriate page
           clear();
           refresh();
@@ -1673,83 +1691,247 @@ void login_page(void) {
   endwin();
 }
 
+// Forward declare functions from menu.c that we'll use
+// Note: draw_status_bar conflicts - menu.c has 5 params, introduction.c has static version with 2 params
+// Use a wrapper function to avoid conflict
+static void draw_status_bar_menu_wrapper(int h, int w, char *left, char *mid, char *right) {
+  extern void draw_status_bar_menu(int h, int w, char *left, char *mid, char *right);
+  draw_status_bar_menu(h, w, left, mid, right);
+}
+extern void render_input_field(WINDOW *win, int w, int h, int y, int x, char *fieldname);
+extern WINDOW *render_win(WINDOW *win, int w, int h, int y, int x, const char *content, int bg_color, int bar_color, bool has_bg);
+extern int calculate_text_height(const char *text, int width);
+extern WINDOW *render_text_with_colors(WINDOW *win, int w, int y, int x, const char *text, int bg_color, int bar_color, bool has_bg, void *colored_words, int num_colors, int sidebar_color);
+extern void render_guide_line(int y, int x, const char *text);
+extern void define_colors(void);
+extern int ai_chat(void);
+extern void social_hall(void);
+
 void teacher_page(void) {
-  initscr();
-  cbreak();
-  noecho();
-  keypad(stdscr, TRUE);
-  curs_set(0);
+  // ColoredWord type matching menu.c
+  typedef struct {
+    const char *word;
+    int color_pair;
+  } ColoredWordMenu;
 
-  start_color();
-  if (can_change_color() && COLORS > 16) {
-    short DARK_GRAY = 16;
-    short GRAY_2 = 17;
-    short FOREGROUND = 18;
-    short ORANGE = 19;
-    short BLACK = 20;
-    short BLUE = 21;
-    short GRAY_3 = 22;
-    short GRAY_4 = 23;
+  while (1) {
+    initscr();
+    cbreak();
+    noecho();
+    keypad(stdscr, TRUE);
+    curs_set(1);
 
-    init_color(DARK_GRAY, RGB_TO_NCURSES(30, 30, 30));
-    init_color(GRAY_2, RGB_TO_NCURSES(128, 128, 128));
-    init_color(FOREGROUND, RGB_TO_NCURSES(238, 238, 238));
-    init_color(ORANGE, RGB_TO_NCURSES(243, 173, 128));
-    init_color(BLACK, RGB_TO_NCURSES(10, 10, 10));
-    init_color(BLUE, RGB_TO_NCURSES(92, 156, 245));
-    init_color(GRAY_3, RGB_TO_NCURSES(53, 53, 53));
-    init_color(GRAY_4, RGB_TO_NCURSES(16, 16, 16));
+    define_colors();
 
-    init_pair(1, COLOR_WHITE, DARK_GRAY);
-    init_pair(2, GRAY_2, BLACK);
-    init_pair(3, FOREGROUND, BLACK);
-    init_pair(4, ORANGE, BLACK);
-    init_pair(5, COLOR_WHITE, BLACK);
-    init_pair(6, ORANGE, DARK_GRAY);
-    init_pair(7, BLACK, BLUE);
-    init_pair(8, COLOR_WHITE, GRAY_3);
-    init_pair(9, COLOR_WHITE, GRAY_4);
-  }
+    wbkgd(stdscr, COLOR_PAIR(5));
 
-  wbkgd(stdscr, COLOR_PAIR(5));
-  leaveok(stdscr, TRUE);
+    clear();
 
-  const char *welcome_text = R"(
-  Welcome Teacher!
-  
-  Teacher dashboard coming soon...
+    int h, w;
+    getmaxyx(stdscr, h, w);
+
+    const char *success_woodmark = R"(
+  █▀▀▀ █  █ ▄▀▀▀ ▄▀▀▀ █▀▀█ █▀▀▀ █▀▀▀ █
+  ▀▀▀█ █░░█ █░░░ █░░░ █▀▀▀ ▀▀▀█ ▀▀▀█ ▀
+  ▀▀▀▀  ▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀▀▀▀ ▀
+                               v0.1.10
   )";
 
-  int welcome_h = count_lines(welcome_text);
-  int screen_h = getmaxy(stdscr);
-  int y_welcome = (screen_h - welcome_h) / 2;
-  if (y_welcome < 0)
-    y_welcome = 0;
+    const char *desc = R"(
+  Welcome Teacher! Access the SUCCESS AI Chatbot for instant answers and explanations, or the Social Hall to share learning materials with your students.
+  )";
 
-  WINDOW *welcome_win =
-      draw_centered_win(stdscr, welcome_text, y_welcome, 0, 0);
-  draw_sub_win(welcome_win, welcome_text, 0, 0, 4);
+    const char *ai_chat_text = R"(
+  SUCCESS AI Chatbot - Get instant answers, explanations, and study guidance powered by AI.
+  )";
 
-  draw_status_bar(" Teacher Dashboard ", " [ESC] Exit ");
+    const char *social_hall_text = R"(
+  Social Hall - Upload and share learning materials and lessons with your students.
+  )";
+    
+    draw_status_bar_menu_wrapper(h, w, " Success v0.1.10 ", " in Teacher Menu ", " Made with <3 ");
+    int input_w = w - 10;
+    int input_y = h - 7;
+    int input_x = (w - input_w) / 2;
+    // Use menu.c's render_input_field wrapper to avoid conflict with static render_input
+    extern void render_input_field(WINDOW *win, int w, int h, int y, int x, char *fieldname);
+    render_input_field(stdscr, input_w, 3, input_y, input_x, ">");
 
-  int ch;
-  while ((ch = getch()) != 27 && ch != KEY_RESIZE) {
-    if (ch == KEY_RESIZE) {
-      resize_term(0, 0);
-      clear();
+    WINDOW *success_woodmark_win = render_win(stdscr, 40, 10, 1, (w - 38) / 2, success_woodmark, 2, 13, false);
+    wattron(success_woodmark_win, COLOR_PAIR(5));
+    mvwaddstr(success_woodmark_win, 1, 7, "█  █ ▄▀▀▀ ▄▀▀▀");
+    mvwaddstr(success_woodmark_win, 2, 7, "█░░█ █░░░ █░░░");
+    mvwaddstr(success_woodmark_win, 3, 8, "▀▀▀ ▀▀▀▀ ▀▀▀▀");
+    wattroff(success_woodmark_win, COLOR_PAIR(5));
+    wrefresh(success_woodmark_win);
 
-      screen_h = getmaxy(stdscr);
-      y_welcome = (screen_h - welcome_h) / 2;
-      if (y_welcome < 0)
-        y_welcome = 0;
+    ColoredWordMenu colored_words[] = {{"Teacher", 4}};
+    int padding = 2;
+    int text_width = input_w - (padding * 2);
+    int desc_height = calculate_text_height(desc, text_width) + 2;
+    render_text_with_colors(stdscr, input_w, 7, input_x, desc, 11, 12, true, (void *)colored_words, 1, 0);
 
-      welcome_win = draw_centered_win(stdscr, welcome_text, y_welcome, 0, 0);
-      draw_sub_win(welcome_win, welcome_text, 0, 0, 4);
-      draw_status_bar(" Teacher Dashboard ", " [ESC] Exit ");
+    ColoredWordMenu colored_words_ai_chat[] = {{"SUCCESS", 15}, {"AI", 15}, {"Chatbot", 15}};
+    int current_y = 7 + desc_height + 1;
+    int ai_chat_height = calculate_text_height(ai_chat_text, text_width) + 2;
+    render_text_with_colors(stdscr, input_w, current_y, input_x, ai_chat_text, 14, 12, true, (void *)colored_words_ai_chat, 3, 15);
+
+    current_y += ai_chat_height + 1;
+    ColoredWordMenu colored_words_social[] = {{"Social", 16}, {"Hall", 16}};
+    render_text_with_colors(stdscr, input_w, current_y, input_x, social_hall_text, 14, 12, true, (void *)colored_words_social, 2, 16);
+
+    int guide_y = input_y - 3;
+    const char *guide_single = "[c] Chat with SUCCESS AI   [s] Access Social Hall   [x] Exit";
+    const char *guide_line1 = "[c] Chat with SUCCESS AI   [s] Access Social Hall";
+    const char *guide_line2 = "                      [x] Exit                      ";
+
+    int guide_single_len = (int)strlen(guide_single);
+    int guide_line1_len = (int)strlen(guide_line1);
+    int guide_line2_len = (int)strlen(guide_line2);
+
+    if (w >= guide_single_len + 4) {
+      int guide_x = (w - guide_single_len) / 2;
+      render_guide_line(guide_y, guide_x, guide_single);
+    } else {
+      int max_wrapped_len = guide_line1_len > guide_line2_len ? guide_line1_len : guide_line2_len;
+      int guide_x = (w - max_wrapped_len) / 2;
+      render_guide_line(guide_y - 1, guide_x, guide_line1);
+      render_guide_line(guide_y, guide_x, guide_line2);
     }
-  }
 
-  clear();
-  refresh();
-  endwin();
+    int input_cursor_y = input_y + 1;
+    int input_cursor_x = input_x + 3;
+    move(input_cursor_y, input_cursor_x);
+    refresh();
+
+    int capacity = 16;
+    int cursor_pos = 0;
+    char *input = malloc(capacity);
+    input[0] = '\0';
+
+    int ch;
+    while (1) {
+      ch = getch();
+
+      if (ch == 10 || ch == KEY_ENTER) {
+        if (cursor_pos == 1 && input[0] == 'c') {
+          endwin();
+#ifdef _WIN32
+          system("cls");
+#else
+          system("clear");
+#endif
+          ai_chat();
+          break;
+        } else if (cursor_pos == 1 && input[0] == 's') {
+          endwin();
+#ifdef _WIN32
+          system("cls");
+#else
+          system("clear");
+#endif
+          social_hall();
+          break;
+        } else if (cursor_pos == 1 && input[0] == 'x') {
+          endwin();
+          free(input);
+          exit(0);
+        }
+        cursor_pos = 0;
+        input[0] = '\0';
+        int input_w = getmaxx(stdscr) - 10;
+        int clear_width = input_w - 4;
+        if (clear_width > 0) {
+          wattron(stdscr, COLOR_PAIR(1));
+          mvwhline(stdscr, input_cursor_y, input_cursor_x, ' ', clear_width);
+          wattroff(stdscr, COLOR_PAIR(1));
+        }
+        move(input_cursor_y, input_cursor_x);
+        refresh();
+        continue;
+      }
+
+      if (ch == KEY_RESIZE) {
+        curs_set(0);
+        clear();
+        getmaxyx(stdscr, h, w);
+        draw_status_bar_menu_wrapper(h, w, " Success v0.1.10 ", " in Teacher Menu ", " Made with <3 ");
+        int input_w = w - 10;
+        int input_y = h - 7;
+        int input_x = (w - input_w) / 2;
+        // Use menu.c's render_input_field wrapper to avoid conflict with static render_input
+        extern void render_input_field(WINDOW *win, int w, int h, int y, int x, char *fieldname);
+        render_input_field(stdscr, input_w, 3, input_y, input_x, ">");
+
+        WINDOW *success_woodmark_win = render_win(stdscr, 40, 10, 1, (w - 38) / 2, success_woodmark, 2, 13, false);
+        wattron(success_woodmark_win, COLOR_PAIR(5));
+        mvwaddstr(success_woodmark_win, 1, 7, "█  █ ▄▀▀▀ ▄▀▀▀");
+        mvwaddstr(success_woodmark_win, 2, 7, "█░░█ █░░░ █░░░");
+        mvwaddstr(success_woodmark_win, 3, 8, "▀▀▀ ▀▀▀▀ ▀▀▀▀");
+        wattroff(success_woodmark_win, COLOR_PAIR(5));
+        wrefresh(success_woodmark_win);
+
+        ColoredWordMenu colored_words[] = {{"Teacher", 4}};
+        int padding = 2;
+        int text_width = input_w - (padding * 2);
+        int desc_height = calculate_text_height(desc, text_width) + 2;
+        render_text_with_colors(stdscr, input_w, 7, input_x, desc, 11, 12, true, (void *)colored_words, 1, 0);
+
+        ColoredWordMenu colored_words_ai_chat[] = {{"SUCCESS", 15}, {"AI", 15}, {"Chatbot", 15}};
+        int current_y = 7 + desc_height + 1;
+        int ai_chat_height = calculate_text_height(ai_chat_text, text_width) + 2;
+        render_text_with_colors(stdscr, input_w, current_y, input_x, ai_chat_text, 14, 12, true, (void *)colored_words_ai_chat, 3, 15);
+
+        current_y += ai_chat_height + 1;
+        ColoredWordMenu colored_words_social[] = {{"Social", 16}, {"Hall", 16}};
+        render_text_with_colors(stdscr, input_w, current_y, input_x, social_hall_text, 14, 12, true, (void *)colored_words_social, 2, 16);
+
+        int guide_y = input_y - 3;
+        if (w >= guide_single_len + 4) {
+          int guide_x = (w - guide_single_len) / 2;
+          render_guide_line(guide_y, guide_x, guide_single);
+        } else {
+          int max_wrapped_len = guide_line1_len > guide_line2_len ? guide_line1_len : guide_line2_len;
+          int guide_x = (w - max_wrapped_len) / 2;
+          render_guide_line(guide_y - 1, guide_x, guide_line1);
+          render_guide_line(guide_y, guide_x, guide_line2);
+        }
+
+        input_cursor_y = input_y + 1;
+        input_cursor_x = input_x + 3;
+        if (cursor_pos > 0) {
+          wattron(stdscr, COLOR_PAIR(1));
+          for (int i = 0; i < cursor_pos; i++) {
+            mvwaddch(stdscr, input_cursor_y, input_cursor_x + i, input[i]);
+          }
+          wattroff(stdscr, COLOR_PAIR(1));
+        }
+        move(input_cursor_y, input_cursor_x + cursor_pos);
+        curs_set(1);
+        refresh();
+      } else if ((ch == KEY_BACKSPACE || ch == 127 || ch == 8) && cursor_pos > 0) {
+        cursor_pos--;
+        input[cursor_pos] = '\0';
+        wattron(stdscr, COLOR_PAIR(1));
+        mvwaddch(stdscr, input_cursor_y, input_cursor_x + cursor_pos, ' ');
+        wattroff(stdscr, COLOR_PAIR(1));
+        wmove(stdscr, input_cursor_y, input_cursor_x + cursor_pos);
+      } else if (ch >= 32 && ch <= 126) {
+        if (cursor_pos + 1 >= capacity) {
+          capacity *= 2;
+          char *new_buf = realloc(input, capacity);
+          input = new_buf;
+        }
+        input[cursor_pos++] = (char)ch;
+        input[cursor_pos] = '\0';
+        wattron(stdscr, COLOR_PAIR(1));
+        mvwaddch(stdscr, input_cursor_y, input_cursor_x + cursor_pos - 1, ch);
+        wattroff(stdscr, COLOR_PAIR(1));
+        refresh();
+      }
+    }
+
+    free(input);
+    continue;
+  }
 }

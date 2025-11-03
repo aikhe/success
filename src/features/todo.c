@@ -1,11 +1,11 @@
 #include "todo.h"
-#include "curses.h"
 #include "../pages/menu.h"
-#include <stdlib.h>
-#include <string.h>
+#include "curses.h"
 #include <sqlite3.h>
 #include <stdbool.h>
 #include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 // Forward declarations for functions from menu.c
 extern void render_input(WINDOW *win, int w, int h, int y, int x,
@@ -81,12 +81,12 @@ static int init_db(void) {
   }
 
   const char *sql = "CREATE TABLE IF NOT EXISTS todos ("
-                     "id INTEGER PRIMARY KEY AUTOINCREMENT,"
-                     "username TEXT NOT NULL,"
-                     "task TEXT NOT NULL,"
-                     "done INTEGER DEFAULT 0,"
-                     "created_at DATETIME DEFAULT CURRENT_TIMESTAMP"
-                     ");";
+                    "id INTEGER PRIMARY KEY AUTOINCREMENT,"
+                    "username TEXT NOT NULL,"
+                    "task TEXT NOT NULL,"
+                    "done INTEGER DEFAULT 0,"
+                    "created_at DATETIME DEFAULT CURRENT_TIMESTAMP"
+                    ");";
 
   char *err_msg = 0;
   rc = sqlite3_exec(db, sql, 0, 0, &err_msg);
@@ -276,7 +276,8 @@ static int calculate_text_height_local(const char *text, int width) {
   return lines > 0 ? lines : 1;
 }
 
-// Render text with wrapping, padding, and colored words (with sidebar color support)
+// Render text with wrapping, padding, and colored words (with sidebar color
+// support)
 static WINDOW *render_text_with_colors(WINDOW *win, int w, int y, int x,
                                        const char *text, int bg_color,
                                        int bar_color, bool has_bg,
@@ -430,7 +431,7 @@ static void render_guide_line(int y, int x, const char *text) {
 
 void todo(const char *username_param) {
   char username[256];
-  
+
   // Get username from parameter or session file
   if (username_param && strlen(username_param) > 0) {
     strncpy(username, username_param, sizeof(username) - 1);
@@ -500,23 +501,30 @@ void todo(const char *username_param) {
 
     // Description window
     const char *desc_text = R"(
-    An academic and task tracking tool that helps you organize assignments, monitor deadlines, and stay on top of your study goals — keeping your academic life structured and stress-free.
+    An academic and task tracking tool that helps you organize assignments, monitor deadlines, and stay on top of your study goals keeping your academic life structured and stress-free.
     )";
 
     int desc_input_w = w - 10;
     int desc_input_x = (w - desc_input_w) / 2;
     int desc_padding = 2;
     int desc_text_width = desc_input_w - (desc_padding * 2);
-    int desc_height = calculate_text_height_local(desc_text, desc_text_width) + 2;
-    int desc_y = 4; // Position below title
+    int desc_height =
+        calculate_text_height_local(desc_text, desc_text_width) + 2;
+    int desc_y = 4;                        // Position below title
     ColoredWord colored_words_desc[] = {}; // No colored words for description
-    render_text_with_colors(stdscr, desc_input_w, desc_y, desc_input_x, desc_text,
-                            11, 12, true, colored_words_desc, 0, 0);
+    render_text_with_colors(stdscr, desc_input_w, desc_y, desc_input_x,
+                            desc_text, 11, 12, true, colored_words_desc, 0, 0);
 
     // Render todos list (start after description)
     int list_start_y = desc_y + desc_height + 1;
-    int available_height = h - list_start_y - (input_mode ? 8 : 6); // Space for title, desc, input (if shown), guide (3 spaces)
-    int max_visible = available_height / 2; // Divide by 2 since we use 2 lines per task (1 space between)
+    int available_height =
+        h - list_start_y -
+        (input_mode
+             ? 8
+             : 6); // Space for title, desc, input (if shown), guide (3 spaces)
+    int max_visible =
+        available_height /
+        2; // Divide by 2 since we use 2 lines per task (1 space between)
     int scroll_offset = 0;
 
     if (selected_index >= max_visible) {
@@ -524,8 +532,10 @@ void todo(const char *username_param) {
     }
 
     for (int i = 0; i < todo_count; i++) {
-      int display_y = list_start_y + (i - scroll_offset) * 2; // *2 for 1 space between tasks
-      if (display_y >= list_start_y + max_visible * 2 || display_y < list_start_y) {
+      int display_y = list_start_y +
+                      (i - scroll_offset) * 2; // *2 for 1 space between tasks
+      if (display_y >= list_start_y + max_visible * 2 ||
+          display_y < list_start_y) {
         continue;
       }
 
@@ -565,13 +575,15 @@ void todo(const char *username_param) {
       snprintf(input_display, sizeof(input_display), "> %s ", new_todo_input);
       render_input(stdscr, input_w, 3, input_y, input_x, input_display);
       curs_set(1); // Show cursor for input
-      move(input_y + 1, input_x + 3 + input_cursor_pos + 2); // +2 for "> " prefix
+      move(input_y + 1,
+           input_x + 3 + input_cursor_pos + 2); // +2 for "> " prefix
     } else {
       // Hide input bar when not adding
       curs_set(0); // Hide cursor when not adding
     }
 
-    // Guide - 3 spaces from status bar (h - 1 is status bar, so h - 4 is 3 spaces above)
+    // Guide - 3 spaces from status bar (h - 1 is status bar, so h - 4 is 3
+    // spaces above)
     int guide_y = input_mode == 1 ? input_y - 3 : h - 4;
     const char *guide_text;
     if (input_mode == 1) {
@@ -663,4 +675,3 @@ void todo(const char *username_param) {
 
   endwin();
 }
-

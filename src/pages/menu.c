@@ -6,6 +6,7 @@
 
 #include "../features/ai_chat.h"
 #include "../features/study_timer.h"
+#include "../features/social_hall.h"
 #include "tools.h"
 
 #define RGB_TO_NCURSES(r, g, b)                                                \
@@ -62,10 +63,13 @@ void define_colors(void) {
     init_pair(16, GREEN, BLACK);
     init_pair(17, CYAN, BLACK);
     init_pair(18, PINK, BLACK);
+    init_pair(19, ORANGE, GRAY_5); // Orange text on GRAY_5 background (for quiz selection)
+    init_pair(20, GREEN, GRAY_5); // Green text on GRAY_5 background (for quiz confirmed answers)
   }
 }
 
-static void draw_status_bar(int h, int w, char *left, char *mid, char *right) {
+// Renamed to avoid conflict with introduction.c's static draw_status_bar
+void draw_status_bar_menu(int h, int w, char *left, char *mid, char *right) {
   wattron(stdscr, COLOR_PAIR(9));
   mvhline(h - 1, 0, ' ', w);
   wattroff(stdscr, COLOR_PAIR(9));
@@ -127,6 +131,11 @@ void render_input(WINDOW *win, int w, int h, int y, int x, char *fieldname) {
   refresh();
 }
 
+// Wrapper function for render_input to avoid conflict with introduction.c's static render_input
+void render_input_field(WINDOW *win, int w, int h, int y, int x, char *fieldname) {
+  render_input(win, w, h, y, x, fieldname);
+}
+
 WINDOW *render_win(WINDOW *win, int w, int h, int y, int x, const char *content,
                    int bg_color, int bar_color, bool has_bg) {
   WINDOW *input_win_bars = newwin(h, w + 2, y, x - 1);
@@ -161,7 +170,7 @@ typedef struct {
 } ColoredWord;
 
 // Calculate height needed for wrapped text (with 2 padding each side)
-static int calculate_text_height(const char *text, int width) {
+int calculate_text_height(const char *text, int width) {
   // Strip leading/trailing whitespace and normalize
   int len = (int)strlen(text);
   char *clean = malloc(len + 1);
@@ -220,7 +229,7 @@ static int calculate_text_height(const char *text, int width) {
 }
 
 // Render text with wrapping, padding, and colored words
-static WINDOW *render_text_with_colors(WINDOW *win, int w, int y, int x,
+WINDOW *render_text_with_colors(WINDOW *win, int w, int y, int x,
                                        const char *text, int bg_color,
                                        int bar_color, bool has_bg,
                                        ColoredWord *colored_words,
@@ -383,7 +392,7 @@ static int get_guide_char_color(char ch) {
 }
 
 // Helper function to render a guide line with colored brackets
-static void render_guide_line(int y, int x, const char *text) {
+void render_guide_line(int y, int x, const char *text) {
   int pos = 0;
   const char *p = text;
   while (*p) {
@@ -460,7 +469,7 @@ void menu(void) {
   SUCCESS AI Chatbot - Get instant answers, explanations, and study guidance powered by AI.
   )";
 
-    const char *social_hall = R"(
+    const char *social_hall_text = R"(
   Social Hall - Access learning materials and updates directly from your teachers.
   )";
 
@@ -473,7 +482,7 @@ void menu(void) {
   )";
 
     // initial display
-    draw_status_bar(h, w, " Success v0.1.10 ", " in Student Menu ",
+    draw_status_bar_menu(h, w, " Success v0.1.10 ", " in Student Menu ",
                     " Made with <3 ");
     int input_w = w - 10;
     int input_y = h - 7;
@@ -507,8 +516,8 @@ void menu(void) {
 
     current_y += ai_chat_height + 1;
     ColoredWord colored_words_social[] = {{"Social", 16}, {"Hall", 16}};
-    int social_height = calculate_text_height(social_hall, text_width) + 2;
-    render_text_with_colors(stdscr, input_w, current_y, input_x, social_hall,
+    int social_height = calculate_text_height(social_hall_text, text_width) + 2;
+    render_text_with_colors(stdscr, input_w, current_y, input_x, social_hall_text,
                             14, 12, true, colored_words_social, 2, 16); // Green
 
     current_y += social_height + 1;
@@ -597,6 +606,16 @@ void menu(void) {
           study_timer();
 
           break;
+        } else if (cursor_pos == 1 && input[0] == 's') {
+          endwin();
+#ifdef _WIN32
+          system("cls");
+#else
+          system("clear");
+#endif
+          social_hall();
+
+          break;
         } else if (cursor_pos == 1 && input[0] == 't') {
           endwin();
           // Note: No need to clear screen - tools() will call initscr() which takes over
@@ -633,7 +652,7 @@ void menu(void) {
         int h, w;
         getmaxyx(stdscr, h, w);
 
-        draw_status_bar(h, w, " Success v0.1.10 ", " in Student Menu ",
+        draw_status_bar_menu(h, w, " Success v0.1.10 ", " in Student Menu ",
                         " Made with <3 ");
         int input_w = w - 10;
         int input_y = h - 7;
@@ -669,9 +688,9 @@ void menu(void) {
 
         current_y += ai_chat_height + 1;
         ColoredWord colored_words_social[] = {{"Social", 16}, {"Hall", 16}};
-        int social_height = calculate_text_height(social_hall, text_width) + 2;
+        int social_height = calculate_text_height(social_hall_text, text_width) + 2;
         render_text_with_colors(stdscr, input_w, current_y, input_x,
-                                social_hall, 14, 12, true, colored_words_social,
+                                social_hall_text, 14, 12, true, colored_words_social,
                                 2,
                                 16); // Green
 
