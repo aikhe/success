@@ -3,7 +3,7 @@
 
 # builds
 build/
-# *.exe
+*.exe
 *.o
 
 env.json
