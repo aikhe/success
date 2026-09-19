@@ -14,9 +14,8 @@
 #include <string.h>
 #include <time.h>
 
-#include <windows.h>
-#undef MOUSE_MOVED // remove redefinition errors from wincon.h macro
-#include <curses.h>
+#include "utils/compat.h"
+#include "utils/paths.h"
 
 #include "pages/introduction.h"
 
@@ -67,36 +66,26 @@ int main(void) {
 
   // setvbuf(stdout, NULL, _IONBF, 0);
 
-  char *env_json = read_file("../env.json");
-
-  cJSON *env = cJSON_Parse(env_json);
+  cJSON *env = load_env_config();
   if (!env) {
-    printf("no env\n");
-    const char *error_ptr = cJSON_GetErrorPtr();
-
-    if (error_ptr) {
-      fprintf(stderr, "[ERROR] Error parsing JSON at %s\n", error_ptr);
-    }
-    printf("no env\n");
-
-    free(env_json);
+    fprintf(stderr, "[ERROR] Could not load environment configuration or env.json\n");
     return EXIT_FAILURE;
   }
 
   cJSON *gemini_api_key =
       cJSON_GetObjectItemCaseSensitive(env, "GEMINI_API_KEY");
-  if (!gemini_api_key->valuestring) {
-    fprintf(stderr, "GEMINI_API_KEY environment variable not set.\n");
-  }
   cJSON *gemini_api_url =
       cJSON_GetObjectItemCaseSensitive(env, "GEMINI_API_URL");
-  if (!gemini_api_url->valuestring) {
-    fprintf(stderr, "GEMINI_API_URL environment variable not set.\n");
-  }
   cJSON *gemini_file_url =
       cJSON_GetObjectItemCaseSensitive(env, "GEMINI_FILE_URL");
-  if (!gemini_file_url->valuestring) {
-    fprintf(stderr, "GEMINI_FILE_URL environment variable not set.\n");
+
+  if (!gemini_api_key || !gemini_api_key->valuestring ||
+      !gemini_api_url || !gemini_api_url->valuestring ||
+      !gemini_file_url || !gemini_file_url->valuestring) {
+    fprintf(stderr, "\n\033[91m[ERROR]\033[0m Gemini API credentials missing or incomplete.\n");
+    fprintf(stderr, "Please set the GEMINI_API_KEY environment variable or create an env.json file.\n\n");
+    cJSON_Delete(env);
+    return EXIT_FAILURE;
   }
 
   char *systemPrompt =
@@ -278,7 +267,6 @@ int main(void) {
   }
 
   NFD_PathSet_Free(&pathSet);
-  free(env_json);
   cJSON_Delete(env);
 
   return EXIT_SUCCESS;

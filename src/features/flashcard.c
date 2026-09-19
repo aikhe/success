@@ -1,6 +1,7 @@
 #include "flashcard.h"
 #include "../pages/menu.h"
-#include "curses.h"
+#include "../utils/compat.h"
+#include "../utils/paths.h"
 #include <ctype.h>
 #include <pthread.h>
 #include <stdbool.h>
@@ -275,6 +276,30 @@ static void render_guide_line(int y, int x, const char *text) {
   wattroff(stdscr, COLOR_PAIR(2));
 }
 
+static bool ci_match(const char *s, const char *prefix, size_t len) {
+  for (size_t i = 0; i < len; i++) {
+    if (tolower((unsigned char)s[i]) != tolower((unsigned char)prefix[i])) {
+      return false;
+    }
+  }
+  return true;
+}
+
+static char *find_marker(const char *haystack, const char *keyword) {
+  if (!haystack || !keyword) return NULL;
+  size_t klen = strlen(keyword);
+  for (const char *p = haystack; *p; p++) {
+    if (ci_match(p, keyword, klen)) {
+      const char *after = p + klen;
+      while (*after == ' ' || *after == '*' || *after == '_' || *after == '\t') after++;
+      if (*after == ':') {
+        return (char *)p;
+      }
+    }
+  }
+  return NULL;
+}
+
 // Parse flashcard response from Gemini
 static int parse_flashcard_response(const char *response) {
   // Free existing flashcard data
@@ -374,20 +399,28 @@ static int parse_flashcard_response(const char *response) {
       while (*q_start == ' ' || *q_start == '\t')
         q_start++;
 
+      // If question has a "**Question**:" or "Question:" prefix, skip past it
+      char *q_prefix = find_marker(q_start, "Question");
+      if (q_prefix && q_prefix == q_start) {
+        char *colon = strchr(q_start, ':');
+        if (colon) {
+          q_start = colon + 1;
+          while (*q_start == ' ' || *q_start == '\t' || *q_start == '*' || *q_start == '_')
+            q_start++;
+        }
+      }
+
       // Read until we find "Answer:" or "Correct answer:" or end of line
       char q_text[512] = {0};
-      char *answer_marker = strstr(q_start, "Answer:");
+      char *answer_marker = find_marker(q_start, "Answer");
       if (!answer_marker)
-        answer_marker = strstr(q_start, "Correct answer:");
-      if (!answer_marker)
-        answer_marker = strstr(q_start, "Correct Answer:");
-      if (!answer_marker)
-        answer_marker = strstr(q_start, "answer:");
+        answer_marker = find_marker(q_start, "Correct answer");
 
       if (answer_marker) {
         int q_len = answer_marker - q_start;
         while (q_len > 0 &&
-               (q_start[q_len - 1] == ' ' || q_start[q_len - 1] == '\t'))
+               (q_start[q_len - 1] == ' ' || q_start[q_len - 1] == '\t' ||
+                q_start[q_len - 1] == '*' || q_start[q_len - 1] == '_'))
           q_len--;
         if (q_len > 0 && q_len < 511) {
           strncpy(q_text, q_start, q_len);
@@ -397,8 +430,13 @@ static int parse_flashcard_response(const char *response) {
       } else {
         // No answer marker found, use rest of line
         int q_len = strlen(q_start);
+        while (q_len > 0 &&
+               (q_start[q_len - 1] == ' ' || q_start[q_len - 1] == '\t' ||
+                q_start[q_len - 1] == '*' || q_start[q_len - 1] == '_'))
+          q_len--;
         if (q_len > 0 && q_len < 511) {
           strncpy(q_text, q_start, q_len);
+          q_text[q_len] = '\0';
           flashcards[current_fc].question = strdup(q_text);
         }
       }
@@ -406,17 +444,11 @@ static int parse_flashcard_response(const char *response) {
       flashcard_count++;
     } else if (current_fc >= 0 && flashcards[current_fc].question != NULL) {
       // Look for answer or explanation
-      char *answer_marker = strstr(line, "Answer:");
+      char *answer_marker = find_marker(line, "Answer");
       if (!answer_marker)
-        answer_marker = strstr(line, "Correct answer:");
-      if (!answer_marker)
-        answer_marker = strstr(line, "Correct Answer:");
-      if (!answer_marker)
-        answer_marker = strstr(line, "answer:");
+        answer_marker = find_marker(line, "Correct answer");
 
-      char *explanation_marker = strstr(line, "Explanation:");
-      if (!explanation_marker)
-        explanation_marker = strstr(line, "explanation:");
+      char *explanation_marker = find_marker(line, "Explanation");
 
       // Extract correct answer
       if (answer_marker && !flashcards[current_fc].correct_answer) {
@@ -426,7 +458,7 @@ static int parse_flashcard_response(const char *response) {
           ans_start++;
         if (*ans_start == ':')
           ans_start++;
-        while (*ans_start == ' ' || *ans_start == '\t')
+        while (*ans_start == ' ' || *ans_start == '\t' || *ans_start == '*' || *ans_start == '_')
           ans_start++;
 
         char *ans_end = ans_start;
@@ -436,7 +468,7 @@ static int parse_flashcard_response(const char *response) {
           ans_end = line + strlen(line);
         }
         while (ans_end > ans_start &&
-               (ans_end[-1] == ' ' || ans_end[-1] == '\t'))
+               (ans_end[-1] == ' ' || ans_end[-1] == '\t' || ans_end[-1] == '*' || ans_end[-1] == '_'))
           ans_end--;
 
         int ans_len = ans_end - ans_start;
@@ -455,12 +487,12 @@ static int parse_flashcard_response(const char *response) {
           exp_start++;
         if (*exp_start == ':')
           exp_start++;
-        while (*exp_start == ' ' || *exp_start == '\t')
+        while (*exp_start == ' ' || *exp_start == '\t' || *exp_start == '*' || *exp_start == '_')
           exp_start++;
 
         char *exp_end = line + strlen(line);
         while (exp_end > exp_start &&
-               (exp_end[-1] == ' ' || exp_end[-1] == '\t'))
+               (exp_end[-1] == ' ' || exp_end[-1] == '\t' || exp_end[-1] == '*' || exp_end[-1] == '_'))
           exp_end--;
 
         int exp_len = exp_end - exp_start;
@@ -1180,14 +1212,8 @@ void flashcard(void) {
   cJSON *gemini_file_url = NULL;
 
   // Load environment
-  char *env_json = read_file("../env.json");
-  if (!env_json) {
-    return;
-  }
-
-  env = cJSON_Parse(env_json);
+  env = load_env_config();
   if (!env) {
-    free(env_json);
     return;
   }
 
@@ -1199,7 +1225,6 @@ void flashcard(void) {
       !gemini_api_url->valuestring || !gemini_file_url ||
       !gemini_file_url->valuestring) {
     cJSON_Delete(env);
-    free(env_json);
     return;
   }
 
@@ -1208,7 +1233,6 @@ void flashcard(void) {
                            gemini_api_key, gemini_file_url)) {
     // User cancelled
     cJSON_Delete(env);
-    free(env_json);
     if (file_uris) {
       for (int i = 0; i < file_count; i++) {
         free(file_uris[i]);
@@ -1273,7 +1297,6 @@ void flashcard(void) {
 
   if (!res_gemini_req) {
     cJSON_Delete(env);
-    free(env_json);
     return;
   }
 
@@ -1281,7 +1304,6 @@ void flashcard(void) {
   if (parse_flashcard_response(res_gemini_req) == 0) {
     free(res_gemini_req);
     cJSON_Delete(env);
-    free(env_json);
     return;
   }
 
@@ -1462,7 +1484,6 @@ void flashcard(void) {
   }
 
   cJSON_Delete(env);
-  free(env_json);
   endwin();
 
   // Redirect to tools page

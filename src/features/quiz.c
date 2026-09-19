@@ -1,6 +1,7 @@
 #include "quiz.h"
 #include "../pages/menu.h"
-#include "curses.h"
+#include "../utils/compat.h"
+#include "../utils/paths.h"
 #include <pthread.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -1298,14 +1299,8 @@ void quiz(void) {
   cJSON *gemini_file_url = NULL;
 
   // Load environment
-  char *env_json = read_file("../env.json");
-  if (!env_json) {
-    return;
-  }
-
-  env = cJSON_Parse(env_json);
+  env = load_env_config();
   if (!env) {
-    free(env_json);
     return;
   }
 
@@ -1317,7 +1312,6 @@ void quiz(void) {
       !gemini_api_url->valuestring || !gemini_file_url ||
       !gemini_file_url->valuestring) {
     cJSON_Delete(env);
-    free(env_json);
     return;
   }
 
@@ -1326,7 +1320,6 @@ void quiz(void) {
                       gemini_api_key, gemini_file_url)) {
     // User cancelled
     cJSON_Delete(env);
-    free(env_json);
     if (file_uris) {
       for (int i = 0; i < file_count; i++) {
         free(file_uris[i]);
@@ -1394,7 +1387,6 @@ void quiz(void) {
 
   if (!res_gemini_req) {
     cJSON_Delete(env);
-    free(env_json);
     return;
   }
 
@@ -1402,7 +1394,6 @@ void quiz(void) {
   if (parse_quiz_response(res_gemini_req) == 0) {
     free(res_gemini_req);
     cJSON_Delete(env);
-    free(env_json);
     return;
   }
 
@@ -1503,7 +1494,6 @@ void quiz(void) {
   }
 
   cJSON_Delete(env);
-  free(env_json);
   endwin();
 
   // Redirect to tools page
