@@ -2,7 +2,6 @@
 #include "../features/flashcard.h"
 #include "../features/quiz.h"
 #include "../features/todo.h"
-#include "curses.h"
 #include "menu.h"
 #include <stdlib.h>
 #include <string.h>

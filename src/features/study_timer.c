@@ -3,12 +3,7 @@
 #include <string.h>
 #include <stdlib.h>
 
-#ifdef _WIN32
-#include <windows.h>
-#include <conio.h>
-#else
-#error "This study timer is Windows-only"
-#endif
+#include "../utils/compat.h"
 
 #include "study_timer.h"
 
@@ -115,7 +110,7 @@ static void pomodoro1(void) {
         // User pressed 'q' to exit
         clear_screen();
         printf("\n\033[1;33mTimer stopped by user. Returning to menu...\033[0m\n");
-        Sleep(2000); // Show message for 2 seconds
+        compat_sleep_ms(2000); // Show message for 2 seconds
         return;
       }
       
@@ -133,7 +128,7 @@ static void pomodoro1(void) {
           // User pressed 'q' to exit
           clear_screen();
           printf("\n\033[1;33mTimer stopped by user. Returning to menu...\033[0m\n");
-          Sleep(2000);
+          compat_sleep_ms(2000);
           return;
         }
       } else {
@@ -148,7 +143,7 @@ static void pomodoro1(void) {
           // User pressed 'q' to exit
           clear_screen();
           printf("\n\033[1;33mTimer stopped by user. Returning to menu...\033[0m\n");
-          Sleep(2000);
+          compat_sleep_ms(2000);
           return;
         }
         clear_screen();
@@ -170,9 +165,9 @@ static void pomodoro1(void) {
 // Interruptible countdown function - returns 0 if completed, 1 if interrupted
 static int countdown(int seconds) {
   for (int i = seconds; i > 0; i--) {
-    // Check for keypress without blocking (Windows only)
-    if (_kbhit()) {
-      char key = _getch();
+    // Check for keypress without blocking
+    if (compat_kbhit()) {
+      char key = compat_getch();
       if (key == 'q' || key == 'Q') {
         return 1; // Interrupted by user
       }
@@ -180,7 +175,7 @@ static int countdown(int seconds) {
     
     printf("\rTime left: \033[1;32m%02d:%02d\033[0m ", i / 60, i % 60);
     fflush(stdout);
-    Sleep(1000); // Windows Sleep (1000 milliseconds = 1 second)
+    compat_sleep_ms(1000);
   }
   printf("\nTime's up!\n");
   return 0; // Completed successfully
@@ -276,9 +271,5 @@ static void help_ascii(void) {
 }
 
 static void clear_screen(void) {
-#ifdef _WIN32
-  system("cls");
-#else
-  system("clear");
-#endif
+  compat_clear_screen();
 }

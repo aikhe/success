@@ -1,7 +1,7 @@
 #ifndef TODO_H
 #define TODO_H
 
-#include "curses.h"
+#include "../utils/compat.h"
 
 void todo(const char *username);
 

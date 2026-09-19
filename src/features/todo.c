@@ -1,6 +1,6 @@
 #include "todo.h"
 #include "../pages/menu.h"
-#include "curses.h"
+#include "../utils/compat.h"
 #include <sqlite3.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -69,11 +69,7 @@ static sqlite3 *db = NULL;
 // Initialize database and create table
 static int init_db(void) {
   // Ensure db directory exists
-#ifdef _WIN32
-  system("if not exist db mkdir db");
-#else
-  system("mkdir -p db");
-#endif
+  compat_mkdir("db");
 
   int rc = sqlite3_open("db/todos.db", &db);
   if (rc != SQLITE_OK) {

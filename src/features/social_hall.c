@@ -1,6 +1,7 @@
 #include "social_hall.h"
 #include "../pages/menu.h"
-#include "curses.h"
+#include "../utils/compat.h"
+#include "../utils/paths.h"
 #include <sqlite3.h>
 #include <stdbool.h>
 #include <stdio.h>
@@ -326,11 +327,7 @@ static WINDOW *render_text_with_colors(WINDOW *win, int w, int y, int x,
 
 // Initialize database and create table
 static int init_db(void) {
-#ifdef _WIN32
-  system("if not exist db mkdir db");
-#else
-  system("mkdir -p db");
-#endif
+  compat_mkdir("db");
 
   int rc = sqlite3_open("db/resources.db", &db);
   if (rc != SQLITE_OK) {
@@ -818,11 +815,9 @@ static void upload_resource(const char *username) {
   nfdresult_t nfd_res = NFD_CANCEL;
   nfdpathset_t pathSet = {0};
 
-  // Load env.json for Gemini API
-  char *env_json = read_file("../env.json");
-  cJSON *env = cJSON_Parse(env_json);
+  // Load env configuration
+  cJSON *env = load_env_config();
   if (!env) {
-    free(env_json);
     endwin();
     return;
   }
@@ -1003,7 +998,6 @@ static void upload_resource(const char *username) {
       }
       NFD_PathSet_Free(&pathSet);
       cJSON_Delete(env);
-      free(env_json);
       
       // Return to social hall (will reload resources)
       return;
@@ -1153,7 +1147,6 @@ static void upload_resource(const char *username) {
     free(file_names);
   }
   cJSON_Delete(env);
-  free(env_json);
   NFD_PathSet_Free(&pathSet);
 }
 
