@@ -273,3 +273,8 @@ https://github.com/user-attachments/assets/9222df74-09c8-4f65-a5b1-84c32ea21009
 
 <img width="1239" height="2745" alt="Image" src="https://github.com/user-attachments/assets/955cca57-981b-4382-8a98-7c6b62eff0d8" />
 -->
+
+---
+
+## License
+This project is licensed under the terms of the [GNU General Public License v3.0](LICENSE).
