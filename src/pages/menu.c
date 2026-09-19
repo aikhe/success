@@ -1,5 +1,4 @@
 #include "menu.h"
-#include "curses.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -586,33 +585,19 @@ void menu(void) {
       if (ch == 10 || ch == KEY_ENTER) {
         if (cursor_pos == 1 && input[0] == 'c') {
           endwin();
-#ifdef _WIN32
-          system("cls");
-#else
-          system("clear");
-#endif
+          compat_clear_screen();
           ai_chat();
 
           break;
         } else if (cursor_pos == 1 && input[0] == 'p') {
           endwin();
-
-#ifdef _WIN32
-          system("cls");
-#else
-          system("clear");
-#endif
-
+          compat_clear_screen();
           study_timer();
 
           break;
         } else if (cursor_pos == 1 && input[0] == 's') {
           endwin();
-#ifdef _WIN32
-          system("cls");
-#else
-          system("clear");
-#endif
+          compat_clear_screen();
           social_hall();
 
           break;

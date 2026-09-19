@@ -4,23 +4,16 @@
 
 #include "introduction.h"
 
-#include "curses.h"
 #include <sqlite3.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <winuser.h>
 
 #include "menu.h"
 #include "../features/ai_chat.h"
 #include "../features/social_hall.h"
-
-#ifdef _WIN32
-#include <direct.h>
-#define mkdir(dir, mode) _mkdir(dir)
-#else
-#include <sys/stat.h>
-#endif
+#include "../utils/compat.h"
+#include "../utils/paths.h"
 
 #define RGB_TO_NCURSES(r, g, b)                                                \
   ((r) * 1000 / 255), ((g) * 1000 / 255), ((b) * 1000 / 255)
@@ -36,8 +29,6 @@ int count_lines(const char *text) {
     if (text[i] == '\n')
       lines++;
   }
-
-  printf("%d\n", lines);
 
   return lines;
 }
@@ -76,8 +67,6 @@ int max_line_width(const char *text) {
     if (*start == '\n')
       start++;
   }
-
-  printf("%d\n", max_width);
 
   return max_width;
 }
@@ -677,7 +666,7 @@ static int save_user_to_db(const char *username, const char *password,
   char *err_msg = 0;
 
   // Ensure db directory exists (ignore error if it already exists)
-  mkdir("db", 0755);
+  compat_mkdir("db");
 
   // Open database connection (creates file if it doesn't exist)
   rc = sqlite3_open("db/users.db", &db);
@@ -1104,7 +1093,7 @@ void signup_page(void) {
               }
 
               // Save username to session file
-              mkdir("db", 0755);
+              compat_mkdir("db");
               FILE *session_file = fopen("db/.session", "w");
               if (session_file) {
                 fprintf(session_file, "%s\n", username);
@@ -1606,7 +1595,7 @@ void login_page(void) {
           break;
         } else {
           // Save username to session file
-          mkdir("db", 0755);
+          compat_mkdir("db");
           FILE *session_file = fopen("db/.session", "w");
           if (session_file) {
             fprintf(session_file, "%s\n", username_buf);
@@ -1816,20 +1805,12 @@ void teacher_page(void) {
       if (ch == 10 || ch == KEY_ENTER) {
         if (cursor_pos == 1 && input[0] == 'c') {
           endwin();
-#ifdef _WIN32
-          system("cls");
-#else
-          system("clear");
-#endif
+          compat_clear_screen();
           ai_chat();
           break;
         } else if (cursor_pos == 1 && input[0] == 's') {
           endwin();
-#ifdef _WIN32
-          system("cls");
-#else
-          system("clear");
-#endif
+          compat_clear_screen();
           social_hall();
           break;
         } else if (cursor_pos == 1 && input[0] == 'x') {

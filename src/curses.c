@@ -1,10 +1,11 @@
 #include <locale.h>
 
+#include "utils/compat.h"
 #include "pages/introduction.h"
 #include "pages/menu.h"
 #include "pages/tools.h"
 
-void enableVirtualTerminal() {
+void enableVirtualTerminal(void) {
 #ifdef _WIN32
   // enable ANSI support for windows cmd
   HANDLE hOut = GetStdHandle(STD_OUTPUT_HANDLE);
@@ -16,15 +17,12 @@ void enableVirtualTerminal() {
   // set both input and output to UTF-8
   SetConsoleOutputCP(CP_UTF8);
   SetConsoleCP(CP_UTF8);
-
-  // support ACS symbols (e.g. pwdcurses box)
-  // SetConsoleOutputCP(437);
-  // SetConsoleCP(437);
 #endif
 }
 
 int main(void) {
-  // setlocale(LC_ALL, "en_US.UTF-8");
+  // Set system default locale for wide-character UTF-8 support
+  setlocale(LC_ALL, "");
 
 #ifdef _WIN32
   if (!setlocale(LC_ALL, "en_US.UTF-8")) {
@@ -35,10 +33,6 @@ int main(void) {
   enableVirtualTerminal();
 
   introduction_page();
-
-  // menu();
-
-  // test();
 
   return 0;
 }
