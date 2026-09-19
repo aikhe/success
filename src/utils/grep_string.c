@@ -1,7 +1,7 @@
 #include "grep_string.h"
 
 char *grep_string(const char *data) {
-  if (*data == '\0')
+  if (!data || *data == '\0')
     return NULL;
 
   const char *line_start = data;
@@ -23,7 +23,7 @@ char *grep_string(const char *data) {
       const char *url_start = strstr(fo, "https://");
       if (url_start) {
         const char *url_end = url_start;
-        while (*url_end != '\r') {
+        while (*url_end != '\r' && *url_end != '\n' && *url_end != '\0' && *url_end != ' ') {
           url_end++;
         }
 
