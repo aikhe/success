@@ -55,37 +55,66 @@ char *gemini_request(char *gemini_url, char **file_uris, char *gemini_api_key,
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&mem);
 
-    curl_easy_setopt(curl, CURLOPT_CAINFO, "../cacert-2025-09-09.pem");
+#ifdef _WIN32
+    #include <io.h>
+    if (_access("cacert-2025-09-09.pem", 0) == 0) {
+      curl_easy_setopt(curl, CURLOPT_CAINFO, "cacert-2025-09-09.pem");
+    } else if (_access("../cacert-2025-09-09.pem", 0) == 0) {
+      curl_easy_setopt(curl, CURLOPT_CAINFO, "../cacert-2025-09-09.pem");
+    }
+#endif
 
     curl_easy_perform(curl);
 
     // printf("%s\n", mem.response);
 
-    cJSON *mem_res = cJSON_Parse(mem.response);
-    cJSON *candidates = cJSON_GetObjectItemCaseSensitive(mem_res, "candidates");
-    cJSON *first_candidate = cJSON_GetArrayItem(candidates, 0);
-    cJSON *content_obj =
-        cJSON_GetObjectItemCaseSensitive(first_candidate, "content");
-    cJSON *parts_obj = cJSON_GetObjectItemCaseSensitive(content_obj, "parts");
-    cJSON *first_part = cJSON_GetArrayItem(parts_obj, 0);
-    cJSON *text = cJSON_GetObjectItemCaseSensitive(first_part, "text");
-
-    // printf("im here\n");
-
     char *gemini_response = NULL;
-    char *cleaned_text = replace_escaped_ansi(text->valuestring);
-    gemini_response = strdup(cleaned_text);
+    char *cleaned_text = NULL;
 
-    // printf("gemini_res: %s\n", gemini_response);
+    if (mem.response) {
+      cJSON *mem_res = cJSON_Parse(mem.response);
+      if (mem_res) {
+        cJSON *candidates = cJSON_GetObjectItemCaseSensitive(mem_res, "candidates");
+        cJSON *first_candidate = cJSON_GetArrayItem(candidates, 0);
+        cJSON *content_obj =
+            cJSON_GetObjectItemCaseSensitive(first_candidate, "content");
+        cJSON *parts_obj = cJSON_GetObjectItemCaseSensitive(content_obj, "parts");
+        cJSON *first_part = cJSON_GetArrayItem(parts_obj, 0);
+        cJSON *text = cJSON_GetObjectItemCaseSensitive(first_part, "text");
 
-    cJSON_Delete(mem_res);
+        if (text && text->valuestring) {
+          cleaned_text = replace_escaped_ansi(text->valuestring);
+          gemini_response = strdup(cleaned_text);
+        } else {
+          // Check for API error object
+          cJSON *error_obj = cJSON_GetObjectItemCaseSensitive(mem_res, "error");
+          if (error_obj) {
+            cJSON *error_msg = cJSON_GetObjectItemCaseSensitive(error_obj, "message");
+            if (error_msg && error_msg->valuestring) {
+              char err_buf[512];
+              snprintf(err_buf, sizeof(err_buf), "[Gemini API Error] %s", error_msg->valuestring);
+              gemini_response = strdup(err_buf);
+            }
+          }
+        }
+        cJSON_Delete(mem_res);
+      }
+    }
+
+    if (!gemini_response) {
+      gemini_response = strdup("[Error] Failed to obtain valid response from Gemini API.");
+    }
 
     free(req_body_json_str);
     cJSON_Delete(req_body_json);
     curl_slist_free_all(list);
     curl_easy_cleanup(curl);
-    free(mem.response);
-    free(cleaned_text);
+    if (mem.response) {
+      free(mem.response);
+    }
+    if (cleaned_text) {
+      free(cleaned_text);
+    }
 
     return gemini_response;
   }

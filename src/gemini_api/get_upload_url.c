@@ -46,7 +46,14 @@ char *get_upload_url(long int image_len, char *gemini_file_url,
   curl_easy_setopt(curl, CURLOPT_HEADERFUNCTION, write_callback);
   curl_easy_setopt(curl, CURLOPT_HEADERDATA, (void *)&mem);
 
-  curl_easy_setopt(curl, CURLOPT_CAINFO, "../cacert-2025-09-09.pem");
+#ifdef _WIN32
+  #include <io.h>
+  if (_access("cacert-2025-09-09.pem", 0) == 0) {
+    curl_easy_setopt(curl, CURLOPT_CAINFO, "cacert-2025-09-09.pem");
+  } else if (_access("../cacert-2025-09-09.pem", 0) == 0) {
+    curl_easy_setopt(curl, CURLOPT_CAINFO, "../cacert-2025-09-09.pem");
+  }
+#endif
 
   curl_easy_perform(curl);
 

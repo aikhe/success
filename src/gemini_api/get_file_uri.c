@@ -38,23 +38,33 @@ char *get_file_uri(unsigned char *image_data, long int image_len,
   curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
   curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void *)&mem);
 
-  curl_easy_setopt(curl, CURLOPT_CAINFO, "../cacert-2025-09-09.pem");
+#ifdef _WIN32
+  #include <io.h>
+  if (_access("cacert-2025-09-09.pem", 0) == 0) {
+    curl_easy_setopt(curl, CURLOPT_CAINFO, "cacert-2025-09-09.pem");
+  } else if (_access("../cacert-2025-09-09.pem", 0) == 0) {
+    curl_easy_setopt(curl, CURLOPT_CAINFO, "../cacert-2025-09-09.pem");
+  }
+#endif
 
   curl_easy_perform(curl);
 
   // printf("GET FILE URI:\n%s\n", mem.response);
 
   char *result_uri = NULL;
-  cJSON *parsed_json = cJSON_Parse(mem.response);
-  cJSON *file = cJSON_GetObjectItemCaseSensitive(parsed_json, "file");
-  // char *req_body_json_str = cJSON_Print(file);
-  // printf("im here uri: %s\n", req_body_json_str);
-  cJSON *uri = cJSON_GetObjectItemCaseSensitive(file, "uri");
-  result_uri = strdup(uri->valuestring);
-
-  // printf("im here uri: %s\n", uri->valuestring);
-
-  cJSON_Delete(parsed_json);
+  if (mem.response) {
+    cJSON *parsed_json = cJSON_Parse(mem.response);
+    if (parsed_json) {
+      cJSON *file = cJSON_GetObjectItemCaseSensitive(parsed_json, "file");
+      if (file) {
+        cJSON *uri = cJSON_GetObjectItemCaseSensitive(file, "uri");
+        if (uri && uri->valuestring) {
+          result_uri = strdup(uri->valuestring);
+        }
+      }
+      cJSON_Delete(parsed_json);
+    }
+  }
 
   curl_slist_free_all(list);
   curl_easy_cleanup(curl);
